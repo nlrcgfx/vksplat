@@ -7,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(VKSPLAT_BUILD_PYTHON "Build pybind11 Python module" ON)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    add_compile_options(-Qunused-arguments)
+endif()
+
 include(cmake/VkSplatWarnings.cmake)
 include(cmake/VkSplatCompileOptions.cmake)
 
@@ -61,7 +65,9 @@ set_target_properties(vksplat_core PROPERTIES
     INTERPROCEDURAL_OPTIMIZATION TRUE
 )
 
-if(WIN32)
+if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    target_compile_definitions(vksplat_core PUBLIC VK_USE_PLATFORM_OHOS_KHR)
+elseif(WIN32)
     target_compile_definitions(vksplat_core PUBLIC VK_USE_PLATFORM_WIN32_KHR)
 elseif(UNIX AND NOT APPLE)
     target_compile_definitions(vksplat_core PUBLIC VK_USE_PLATFORM_XLIB_KHR)
