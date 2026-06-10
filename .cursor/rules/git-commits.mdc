@@ -1,0 +1,92 @@
+---
+description: Git commit workflow and Conventional Commits message format
+alwaysApply: true
+---
+
+# Git Commits
+
+Only create commits when the user explicitly asks. Do not push unless explicitly asked.
+
+## Pre-commit workflow
+
+Run in parallel before staging:
+
+- `git status`
+- `git diff` (staged and unstaged)
+- `git log --oneline -10`
+
+Then sequentially: stage relevant files → commit → `git status` to verify.
+
+## Commit message format
+
+**Subject (required):** `tag: concise message`
+
+- Lowercase Conventional Commits tag.
+- Imperative mood, no trailing period, ~72 characters max.
+- Focus on why, not a file list.
+
+**Body (optional):** blank line after subject, then 1–3 sentences for context, trade-offs, or breaking changes.
+
+### Allowed tags
+
+| Tag | Use for |
+|-----|---------|
+| `feat` | New feature or capability |
+| `fix` | Bug fix |
+| `docs` | README, comments, docs only |
+| `refactor` | Code change without behavior change |
+| `build` | CMake, build scripts, dependencies |
+| `test` | Tests or benchmarks |
+| `chore` | Maintenance, tooling, misc |
+| `perf` | Performance improvement |
+| `style` | Formatting only (no logic change) |
+| `ci` | CI/CD config |
+
+### Examples
+
+```
+build: add optional Python bindings toggle in CMake
+
+Keep default build path free of pybind when VKSPLAT_BUILD_PYTHON is OFF.
+```
+
+```
+fix: correct radix sort buffer size for large splat counts
+
+Prevents GPU validation errors when instance count exceeds 1M.
+```
+
+```
+docs: add arxiv badge and bibtex entry to readme
+```
+
+### Commit command
+
+Prefer HEREDOC for multi-line messages:
+
+```bash
+git commit -m "$(cat <<'EOF'
+tag: concise message
+
+Optional description when it adds context.
+EOF
+)"
+```
+
+On Windows/PowerShell, use `-m "subject" -m "body"` if HEREDOC is unavailable.
+
+## Safety
+
+- Never update git config.
+- No destructive git commands (force push, hard reset) unless explicitly requested.
+- No `--no-verify` or hook skipping unless explicitly requested.
+- No `--amend` unless the user requested it, HEAD was created this session, and it was not pushed.
+- Never commit secrets or credentials.
+- Do not create empty commits.
+
+## Do not stage (unless user explicitly asks)
+
+- Build outputs: `build/`, `vksplat/build/`
+- Caches: `.slangtorch_cache`, `__pycache__/`
+
+If `git status` shows build artifacts, stage only source changes and mention that build dirs were skipped.
