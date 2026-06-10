@@ -96,7 +96,7 @@ void VulkanGSTrainer::cleanup() {
 void VulkanGSTrainer::initialize(const std::map<std::string, std::string> &spirv_paths, int device_id) {
 
     VulkanGSRenderer::initialize(spirv_paths, device_id);
-    
+
     createComputePipeline(pipeline_ssim_forward, spirv_paths.at("ssim_forward"));
     createComputePipeline(pipeline_ssim_backward, spirv_paths.at("ssim_backward"));
     createComputePipeline(pipeline_fused_projection_backward_optimizer, spirv_paths.at("fused_projection_backward_optimizer"));
@@ -207,7 +207,7 @@ void VulkanGSTrainer::load_colmap_dataset(
     auto loadImageTask = [&](int imageIdx) -> std::pair<DatasetImage, bool> {
         auto& rawImage = images[imageIdx];
         auto& rawCamera = rawCameras[rawImage.camera_id];
-        
+
         Camera camera;
         camera.h = (int)rawCamera.height;
         camera.w = (int)rawCamera.width;
@@ -392,7 +392,7 @@ void VulkanGSTrainer::load_colmap_dataset(
         image.camera = camera;
         image.buffer.resize(h*w*4);
         image.buffer.assign(&pixels[0], &pixels[h*w*4]);
-        
+
         // Free the stbi allocated memory
         stbi_image_free(pixels);
 
@@ -406,7 +406,7 @@ void VulkanGSTrainer::load_colmap_dataset(
         }
 
         bool isValidation = (imageIdx % config.eval_interval == 0);
-        
+
         return std::make_pair(std::move(image), isValidation);
     };
 
@@ -418,18 +418,18 @@ void VulkanGSTrainer::load_colmap_dataset(
     const int batchSize = numThreads * 2; // Process 2x threads worth at a time
     for (int startIdx = 0; startIdx < numImages; startIdx += batchSize) {
         int endIdx = std::min(startIdx + batchSize, numImages);
-        
+
         // Launch batch of tasks
         for (int imageIdx = startIdx; imageIdx < endIdx; imageIdx++) {
             futures.emplace_back(std::async(std::launch::async, loadImageTask, imageIdx));
         }
-        
+
         // Wait for this batch to complete before starting the next
         // This prevents too many threads from being created at once
         if (endIdx < numImages) {
             for (int i = startIdx; i < endIdx; i++) {
                 auto result = futures[i].get();
-                
+
                 std::lock_guard<std::mutex> lock(datasetMutex);
                 if (result.second)
                     dataset_val.push_back(std::move(result.first));
@@ -441,7 +441,7 @@ void VulkanGSTrainer::load_colmap_dataset(
     // Collect remaining results
     for (size_t i = (numImages / batchSize) * batchSize; i < futures.size(); i++) {
         auto result = futures[i].get();
-        
+
         std::lock_guard<std::mutex> lock(datasetMutex);
         if (result.second)
             dataset_val.push_back(std::move(result.first));
@@ -630,7 +630,7 @@ void VulkanGSTrainer::executeComputeSSIMGradient(
     const uint32_t kTwoHalo = 10;
     shader_uniforms[2].f = (1.0f - config.ssim_lambda) / (3.0f * w * h);  // l1 grad weight
     shader_uniforms[3].f = -config.ssim_lambda / (3.0f * (w-kTwoHalo) * (h-kTwoHalo));  // ssim grad weight
-    
+
     auto& train_image = dataset_train[train_idx].buffer;
     bool buffer_swapped = false;
     if (train_image.deviceBuffer.buffer == VK_NULL_HANDLE) {
@@ -652,7 +652,7 @@ void VulkanGSTrainer::executeComputeSSIMGradient(
     auto& ssim_map = buffers._temp_gauss_attr;  // reuse buffer to save VRAM
 
     executeCompute(
-        {{w, 16}, {h, 16}},
+        {{w, VKSPLAT_SSIM_BLOCK_X}, {h, VKSPLAT_SSIM_BLOCK_X}},
         shader_uniforms, 4*sizeof(Uniform32_t),
         pipeline_ssim_forward,
         {
@@ -666,7 +666,7 @@ void VulkanGSTrainer::executeComputeSSIMGradient(
         { ssim_map.deviceBuffer, COMPUTE_SHADER_WRITE },
     }, COMPUTE_SHADER_READ);
     executeCompute(
-        {{w, 16}, {h, 16}},
+        {{w, VKSPLAT_SSIM_BLOCK_X}, {h, VKSPLAT_SSIM_BLOCK_X}},
         shader_uniforms, 3*sizeof(Uniform32_t),
         pipeline_ssim_backward,
         {
@@ -954,7 +954,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
 
         if (num_prune > 0) {
             executeCumsum(buffers, buffers.default_keep_mask, buffers._temp_indices);
-            
+
             enum PruneType {
                 Default, Sh, Mean
             };
@@ -1174,7 +1174,7 @@ void VulkanGSTrainer::executeMCMCPostBackward(
         size_t num_add = std::max(new_num_splats, num_splats) - num_splats;
         if (num_add > 0) {
             uniforms[1].u = (uint32_t)num_add;
-            
+
             // 1) Compute relocation probabilities for all Gaussians
             bufferMemoryBarrier({
                 { buffers.scales_opacs.deviceBuffer, COMPUTE_SHADER_READ_WRITE },
