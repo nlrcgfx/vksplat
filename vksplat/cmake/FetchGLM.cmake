@@ -12,5 +12,4 @@ vksplat_fetch_dependency(
     URL "${VKSPLAT_GLM_REMOTE_URL}"
     LOCAL_ARCHIVE "${VKSPLAT_GLM_ARCHIVE}"
     URL_HASH "${VKSPLAT_GLM_SHA256}"
-    SOURCE_SUBDIR glm
 )
