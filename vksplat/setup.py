@@ -1,7 +1,10 @@
+import hashlib
 import os
 import sys
 import platform
-import subprocess
+import urllib.error
+import urllib.request
+import zipfile
 from pathlib import Path
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
@@ -9,6 +12,23 @@ import pybind11
 from setuptools import setup, Extension
 
 __version__ = "0.1.0"
+
+# Keep in sync with cmake/FetchGLM.cmake
+VKSPLAT_GLM_VERSION = "1.0.3"
+VKSPLAT_GLM_URL = (
+    f"https://github.com/g-truc/glm/releases/download/"
+    f"{VKSPLAT_GLM_VERSION}/glm-{VKSPLAT_GLM_VERSION}.zip"
+)
+VKSPLAT_GLM_SHA256 = "1c0a0fced9b0d87c7b7bc94e40be490cff6d4c83c25db8488d8f33754e7fdeb2"
+
+VKSPLAT_ROOT = Path(__file__).resolve().parent
+VKSPLAT_CONTRIB = VKSPLAT_ROOT / "contrib"
+
+SYSTEM_GLM_PATHS = [
+    "/usr/include/glm",
+    "/usr/local/include/glm",
+    "/opt/homebrew/include/glm",  # macOS Homebrew
+]
 
 # Define the extension module
 ext_modules = [
@@ -69,6 +89,60 @@ def find_vulkan():
     
     return None
 
+def ensure_glm_contrib():
+    """Download and extract GLM into contrib/ if not already present."""
+    archive = VKSPLAT_CONTRIB / f"glm-{VKSPLAT_GLM_VERSION}.zip"
+    include_dir = VKSPLAT_CONTRIB / "glm"
+    marker = include_dir / "glm" / "glm.hpp"
+
+    if marker.exists():
+        return str(include_dir)
+
+    VKSPLAT_CONTRIB.mkdir(parents=True, exist_ok=True)
+
+    if not archive.exists():
+        print(f"Downloading GLM {VKSPLAT_GLM_VERSION} to {archive}")
+        urllib.request.urlretrieve(VKSPLAT_GLM_URL, archive)
+
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if digest != VKSPLAT_GLM_SHA256:
+        raise RuntimeError(
+            f"GLM archive hash mismatch: expected {VKSPLAT_GLM_SHA256}, got {digest}"
+        )
+
+    if not marker.exists():
+        print(f"Extracting GLM to {VKSPLAT_CONTRIB}")
+        with zipfile.ZipFile(archive, "r") as zf:
+            zf.extractall(VKSPLAT_CONTRIB)
+
+    return str(include_dir)
+
+
+def resolve_glm_include_dir():
+    """Resolve GLM include dir: contrib first (matches CMake), then system paths."""
+    archive = VKSPLAT_CONTRIB / f"glm-{VKSPLAT_GLM_VERSION}.zip"
+    marker = VKSPLAT_CONTRIB / "glm" / "glm" / "glm.hpp"
+
+    if marker.exists() or archive.exists():
+        return ensure_glm_contrib()
+
+    if not archive.exists():
+        try:
+            return ensure_glm_contrib()
+        except urllib.error.URLError:
+            pass
+
+    for glm_path in SYSTEM_GLM_PATHS:
+        glm_header = Path(glm_path) / "glm.hpp"
+        if glm_header.exists():
+            return str(glm_header.parent.parent)
+
+    raise RuntimeError(
+        "GLM not found: place glm-{0}.zip in {1}, install a system GLM, or allow network download".format(
+            VKSPLAT_GLM_VERSION, VKSPLAT_CONTRIB
+        )
+    )
+
 def configure_build():
     """Configure build settings based on platform and available libraries"""
 
@@ -110,44 +184,9 @@ def configure_build():
         ext.define_macros = [("VK_USE_PLATFORM_XLIB_KHR", None)]
     
     # Add GLM (header-only library)
-    # Try to find system GLM first
-    glm_paths = [
-        "/usr/include/glm",
-        "/usr/local/include/glm",
-        "/opt/homebrew/include/glm",  # macOS Homebrew
-        "third_party/glm/glm"  # Local copy
-    ]
-    
-    glm_found = False
-    for glm_path in glm_paths:
-        if os.path.exists(os.path.join(glm_path, "glm.hpp")):
-            ext.include_dirs.append(os.path.dirname(glm_path))
-            glm_found = True
-            print(f"Found GLM at: {glm_path}")
-            break
-    
-    if not glm_found:
-        print("GLM not found in system paths. Cloning from GitHub...")
-        glm_dir = "third_party/glm"
-        
-        # Create third_party directory if it doesn't exist
-        os.makedirs("third_party", exist_ok=True)
-        
-        # Clone GLM if directory doesn't exist
-        if not os.path.exists(glm_dir):
-            try:
-                subprocess.run([
-                    "git", "clone", "--depth", "1", "--branch", "0.9.9.8",
-                    "https://github.com/g-truc/glm.git", glm_dir, "--depth", "1"
-                ], check=True, capture_output=True, text=True)
-                print(f"Successfully cloned GLM to {glm_dir}")
-            except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Failed to clone GLM: {e.stderr}")
-            except FileNotFoundError:
-                raise RuntimeError("Git not found. Please install git or manually place GLM in third_party/glm/")
-        
-        # Add GLM include path
-        ext.include_dirs.append(glm_dir)
+    glm_include = resolve_glm_include_dir()
+    ext.include_dirs.append(glm_include)
+    print(f"Using GLM from: {glm_include}")
     
     # Compiler flags
     if platform.system() != "Windows":

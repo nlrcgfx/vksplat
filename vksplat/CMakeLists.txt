@@ -1,57 +1,22 @@
-cmake_minimum_required(VERSION 3.16)
-project(VkSplat)
+cmake_minimum_required(VERSION 3.28)
+project(VkSplat VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (MSVC)
-    set(CMAKE_CXX_FLAGS "/W4")
-    # set(CMAKE_CXX_FLAGS_DEBUG "/Zi /fsanitize=address")
-    set(CMAKE_CXX_FLAGS_DEBUG "/Zi")
-    set(CMAKE_CXX_FLAGS_RELEASE "/O2")
-else()
-    set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-    # set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer -fno-common")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-endif()
+option(VKSPLAT_BUILD_PYTHON "Build pybind11 Python module" ON)
+
+include(cmake/VkSplatWarnings.cmake)
+include(cmake/VkSplatCompileOptions.cmake)
 
 # Find required packages
 find_package(Vulkan REQUIRED)
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
-# Find pybind11
-find_package(pybind11 QUIET)
-if(NOT pybind11_FOUND)
-    # If pybind11 is not found, download it
-    message(STATUS "Downloading pybind11")
-    include(FetchContent)
-    FetchContent_Declare(
-        pybind11
-        GIT_REPOSITORY https://github.com/pybind/pybind11
-        GIT_TAG        v2.11.1
-        GIT_SHALLOW    TRUE
-    )
-    FetchContent_MakeAvailable(pybind11)
-endif()
+include(cmake/FetchDependency.cmake)
+include(cmake/FetchGLM.cmake)
 
-# Find GLM
-find_package(glm QUIET)
-if(NOT glm_FOUND)
-    # If GLM is not found, download it
-    message(STATUS "Downloading GLM")
-    include(FetchContent)
-    FetchContent_Declare(
-        glm
-        GIT_REPOSITORY https://github.com/g-truc/glm
-        GIT_TAG        0.9.9.8
-        GIT_SHALLOW    TRUE
-    )
-    FetchContent_MakeAvailable(glm)
-endif()
-
-# Source files
-set(SOURCES
+set(VKSPLAT_CORE_SOURCES
     src/buffer.cpp
     src/colmap_reader.cpp
     src/knn.cpp
@@ -60,10 +25,9 @@ set(SOURCES
     src/gs_renderer.cpp
     src/gs_trainer.cpp
     src/perf_timer.cpp
-    src/python_bindings.cpp
 )
 
-set(HEADERS
+set(VKSPLAT_CORE_HEADERS
     src/config.h
     src/buffer.h
     src/colmap_reader.h
@@ -75,38 +39,64 @@ set(HEADERS
     src/perf_timer.h
 )
 
-# Create the Python module
-pybind11_add_module(vksplat ${SOURCES} ${HEADERS})
+add_library(vksplat_core STATIC ${VKSPLAT_CORE_SOURCES} ${VKSPLAT_CORE_HEADERS})
 
-# Link libraries
-target_link_libraries(vksplat PRIVATE 
-    Vulkan::Vulkan
-    glm::glm
-    # asan
+target_link_libraries(vksplat_core PRIVATE
+    vksplat_warnings
+    vksplat_compile_options
 )
 
-# Compiler-specific options
-target_compile_definitions(vksplat PRIVATE VERSION_INFO=${EXAMPLE_VERSION_INFO})
+target_include_directories(vksplat_core PUBLIC src)
 
-if(DEFINED OPTIMIZATION_LEVEL)
-    target_compile_definitions(vksplat PRIVATE
-        "OPTIMIZATION_LEVEL=${OPTIMIZATION_LEVEL}")
-endif()
+target_link_libraries(vksplat_core PUBLIC
+    Vulkan::Vulkan
+    glm::glm
+)
 
-# Set properties
-set_target_properties(vksplat PROPERTIES
+set_target_properties(vksplat_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET "hidden"
     INTERPROCEDURAL_OPTIMIZATION TRUE
 )
 
-# Platform-specific settings
 if(WIN32)
-    target_compile_definitions(vksplat PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+    target_compile_definitions(vksplat_core PUBLIC VK_USE_PLATFORM_WIN32_KHR)
 elseif(UNIX AND NOT APPLE)
-    target_compile_definitions(vksplat PRIVATE VK_USE_PLATFORM_XLIB_KHR)
+    target_compile_definitions(vksplat_core PUBLIC VK_USE_PLATFORM_XLIB_KHR)
 elseif(APPLE)
-    target_compile_definitions(vksplat PRIVATE VK_USE_PLATFORM_MACOS_MVK)
+    target_compile_definitions(vksplat_core PUBLIC VK_USE_PLATFORM_MACOS_MVK)
 endif()
 
-# Install target
-install(TARGETS vksplat DESTINATION .)
+if(VKSPLAT_BUILD_PYTHON)
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+
+    # Find pybind11
+    find_package(pybind11 QUIET)
+    if(NOT pybind11_FOUND)
+        # If pybind11 is not found, download it
+        message(STATUS "Downloading pybind11")
+        include(FetchContent)
+        FetchContent_Declare(
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11
+            GIT_TAG        v2.11.1
+            GIT_SHALLOW    TRUE
+        )
+        FetchContent_MakeAvailable(pybind11)
+    endif()
+
+    pybind11_add_module(vksplat MODULE src/python_bindings.cpp)
+
+    target_link_libraries(vksplat PRIVATE
+        vksplat_core
+        vksplat_warnings
+        vksplat_compile_options
+    )
+
+    set_target_properties(vksplat PROPERTIES
+        CXX_VISIBILITY_PRESET "hidden"
+        INTERPROCEDURAL_OPTIMIZATION TRUE
+    )
+
+    install(TARGETS vksplat DESTINATION .)
+endif()

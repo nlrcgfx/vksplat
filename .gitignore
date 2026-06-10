@@ -1,12 +1,29 @@
-__pycache__/
-.vscode/
-.slangtorch_cache
-*.lock
-build/
-build1*/
-dist/
-*.egg-info
-*.py[cod]
-*.so
+# CMake (primary build dir: cmake -B build from vksplat/)
+vksplat/build/
+vksplat/build-*/
 
-vksplat/third_party/glm
+# Legacy local build dirs
+build/
+
+# Generated SPIR-V shaders (compile_shaders.py)
+vksplat/shader/generated/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+*.so
+*.pyd
+
+# Caches / locks
+.slangtorch_cache/
+*.lock
+
+# IDE / editor
+.vscode/
+.vs/
+.idea/
+*.user
+CMakeUserPresets.json

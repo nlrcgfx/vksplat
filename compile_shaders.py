@@ -348,12 +348,6 @@ def main():
         glslc_path=args.glslc,
         max_workers=args.jobs
     )
-    additional_args = ''.join(f" {key}={value}" for (key, value) in [
-        # ('-DOPTIMIZATION_LEVEL', OPTIMIZATION_LEVEL)
-    ] if value is not None)
-    config.slangc_compile_args += additional_args
-    config.glslc_compile_args += additional_args
-    
     compiler = ShaderCompiler(config)
     success = compiler.compile_all(force=args.force)
     

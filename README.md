@@ -22,7 +22,7 @@ Features:
 ### System Requirements
 - Vulkan SDK installed
 - Python 3.7+
-- Python3 dependencies for building pybind11 C++ extension AND/OR CMake 3.16+ (see "Installation" section below)
+- Python3 dependencies for building pybind11 C++ extension AND/OR CMake 3.28+ (see "Installation" section below)
 - C++17 compatible compiler
 
 #### Tested with
