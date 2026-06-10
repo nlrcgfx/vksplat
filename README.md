@@ -139,6 +139,8 @@ Vulkan/C++ code in `vksplat/src/`:
 - `gs_renderer`: Rendering functionality, inherited from `gs_pipeline`
 - `gs_trainer`: Training functionality, inherited from `gs_renderer`
 
+See [docs/shader-pipeline.md](docs/shader-pipeline.md) for the GPU compute pipeline, buffer I/O, and stage diagrams.
+
 
 ### Recompile shaders
 
