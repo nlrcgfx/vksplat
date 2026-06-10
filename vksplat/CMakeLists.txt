@@ -6,12 +6,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(VKSPLAT_BUILD_PYTHON "Build pybind11 Python module" ON)
-set(VKSPLAT_BUILD_APPS_DEFAULT ON)
-if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
-    set(VKSPLAT_BUILD_APPS_DEFAULT OFF)
-endif()
-option(VKSPLAT_BUILD_APPS "Build VkSplat C++ applications" ${VKSPLAT_BUILD_APPS_DEFAULT})
-option(VKSPLAT_BUILD_TRAINER_APP "Build the VkSplat trainer executable" ON)
+
+option(VKSPLAT_BUILD_APPS "Build VkSplat C++ applications" ON)
 option(VKSPLAT_EMULATE_INT64 "Compile C++ and shaders for emulated int64 tile bounds" OFF)
 option(VKSPLAT_EMULATE_F32_ATOMIC "Compile C++ and shaders for emulated f32 atomics" OFF)
 
