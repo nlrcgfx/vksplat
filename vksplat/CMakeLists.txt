@@ -10,11 +10,12 @@ option(VKSPLAT_BUILD_PYTHON "Build pybind11 Python module" ON)
 include(cmake/VkSplatWarnings.cmake)
 include(cmake/VkSplatCompileOptions.cmake)
 
-# Find required packages
-find_package(Vulkan REQUIRED)
-
 include(cmake/FetchDependency.cmake)
+
 include(cmake/FetchGLM.cmake)
+include(cmake/FetchVulkanHeaders.cmake)
+
+find_package(Vulkan REQUIRED)
 
 set(VKSPLAT_CORE_SOURCES
     src/buffer.cpp
@@ -49,6 +50,7 @@ target_link_libraries(vksplat_core PRIVATE
 target_include_directories(vksplat_core PUBLIC src)
 
 target_link_libraries(vksplat_core PUBLIC
+    Vulkan::Headers
     Vulkan::Vulkan
     glm::glm
 )
