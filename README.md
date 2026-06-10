@@ -4,7 +4,7 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2605.00219-b31b1b.svg)](https://arxiv.org/abs/2605.00219)
 ![License](https://img.shields.io/github/license/harry7557558/vksplat)
 
-This project provides functionality for training 3D Gaussian Splatting (3DGS) models, using Vulkan compute backend with Python binding.
+This project provides functionality for training 3D Gaussian Splatting (3DGS) models, using Vulkan compute backend with Python bindings and a C++ trainer executable.
 
 This is code for paper "VkSplat: High-Performance 3DGS Training in Vulkan Compute".
 
@@ -34,7 +34,7 @@ We also received feedback from users who successfully ran VkSplat on Mac devices
 
 ## Installation
 
-GLM 1.0.3 is vendored as `vksplat/contrib/glm-1.0.3.zip` for offline builds. CMake and pip use that archive directly; pip may also extract headers to `vksplat/contrib/glm/` (gitignored).
+GLM 1.0.3, CLI11 2.4.2, and nlohmann_json 3.11.3 are vendored as local archives under `vksplat/contrib/` for offline CMake builds. CMake uses those archives through FetchContent; pip may also extract GLM headers to `vksplat/contrib/glm/` (gitignored).
 
 ### Method 1: Using pip
 
@@ -88,6 +88,12 @@ cmake --build --preset release
 
 Debug build: replace `release` with `debug`. On Windows, run from a Visual Studio Developer shell so Ninja can find MSVC.
 
+The CMake build also produces the C++ trainer executable when `VKSPLAT_BUILD_APPS=ON`:
+
+```bash
+cmake --build --preset release --target vksplat_train
+```
+
 Optional shader/device compatibility flags:
 
 ```bash
@@ -129,6 +135,24 @@ Before running `simple_trainer.py`, make the following edits if needed:
 - If you want to use an in-browser viewer (similar to the one used by GSplat) during training, set `enable_viewer` in trainer config to `True`.
 
 Running the code should create a work folder. After training, you may find training time and memory in `train.json`, metrics in `eval.json`, saved PLY file in `splat.ply`, as well as validation renders.
+
+### C++ trainer executable
+
+The C++ executable runs the core training flow without importing Python. It writes `config.json`, `train.json`, `splat.ply`, and validation render PNGs by default. Torchmetrics evaluation and the Python viewer are still Python-only.
+
+```bash
+cd /path/to/vksplat
+cmake --preset release
+cmake --build --preset release --target vksplat_train
+./build/release/apps/trainer/vksplat_train \
+  --dataset-dir /path/to/colmap-scene \
+  --output-dir /path/to/outputs \
+  --image-dir images_4 \
+  --sparse-dir sparse/0 \
+  --strategy mcmc
+```
+
+Use `vksplat_train --help` for all CLI11 options, including optimizer and densification overrides. Use `--shader-dir` if the executable is run away from the source-tree shader directory.
 
 If your device lacks shader int64 or float32 atomic add support, build C++ and shaders with matching emulation flags instead of editing shader files by hand. For CMake, configure with `-DVKSPLAT_EMULATE_INT64=ON` and/or `-DVKSPLAT_EMULATE_F32_ATOMIC=ON`, then recompile shaders. For direct shader compilation, pass `--emulate-int64 1` and/or `--emulate-f32-atomic 1` to `compile_shaders.py`.
 

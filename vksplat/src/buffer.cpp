@@ -711,6 +711,8 @@ void VulkanGSPipelineBuffers::assignScalesOpacs(
     template void VulkanGSPipelineBuffers::undoReorderSH(Buffer<dtype> &coeffs, size_t num_splats);
 
 _INSTANTIATE_BUFFER(uint8_t)
+_INSTANTIATE_BUFFER(uint32_t)
+_INSTANTIATE_BUFFER(uint64_t)
 _INSTANTIATE_BUFFER(float)
 _INSTANTIATE_BUFFER(int32_t)
 _INSTANTIATE_BUFFER(int64_t)

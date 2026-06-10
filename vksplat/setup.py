@@ -42,6 +42,7 @@ ext_modules = [
             "src/gs_pipeline.cpp",
             "src/gs_renderer.cpp",
             "src/gs_trainer.cpp",
+            "src/training_session.cpp",
             "src/perf_timer.cpp",
             "src/python_bindings.cpp",
         ],

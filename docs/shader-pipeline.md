@@ -6,7 +6,7 @@ VkSplat trains 3D Gaussian Splatting (3DGS) entirely on the GPU. Slang and GLSL 
 
 | Layer | File | Role |
 |-------|------|------|
-| Python API | `vksplat/src/python_bindings.cpp` | `train_step`, `forward`, per-stage debug entry points |
+| Session/API | `vksplat/src/training_session.cpp`, `vksplat/src/python_bindings.cpp` | `train_step`, `forward`, per-stage debug entry points |
 | Renderer | `vksplat/src/gs_renderer.cpp` | Projection, tile sort, rasterize |
 | Trainer | `vksplat/src/gs_trainer.cpp` | SSIM loss, optimizer, densification, Morton reorder |
 | Buffers | `vksplat/src/buffer.h` | `VulkanGSPipelineBuffers` layout |
@@ -28,7 +28,7 @@ Tile size is 16×16 (`TILE_WIDTH` / `TILE_HEIGHT` in `vksplat/slang/config.slang
 
 ## Training step overview
 
-From `VkSplat::train_step` in `python_bindings.cpp`:
+From `VkSplatTrainingSession::train_step` in `training_session.cpp`:
 
 ```mermaid
 flowchart LR
@@ -749,7 +749,7 @@ When adding or changing shaders:
 
 1. Add Slang/GLSL source under `vksplat/slang/` or `vksplat/shader/radix_sort/`.
 2. Register the job in `compile_shaders.py` (`_create_shader_jobs`).
-3. Add the SPIR-V name to `VkSplat::initialize` in `python_bindings.cpp`.
+3. Add the SPIR-V name to `VkSplatTrainingSession::initialize` in `vksplat/src/training_session.cpp`.
 4. Wire `createComputePipeline` and `executeCompute` in `gs_renderer.cpp` or `gs_trainer.cpp`.
 5. Recompile: `python compile_shaders.py` (use `--force` to bypass cache).
 6. Update this document: relevant subgraph section + shader index appendix.
