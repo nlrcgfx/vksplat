@@ -21,6 +21,9 @@ dist/
 .slangtorch_cache/
 *.lock
 
+# Vendored deps (glm-1.0.3.zip is committed; extracted tree is not)
+vksplat/contrib/glm/
+
 # IDE / editor
 .vscode/
 .vs/

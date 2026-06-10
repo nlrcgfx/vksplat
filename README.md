@@ -34,6 +34,8 @@ We also received feedback from users who successfully ran VkSplat on Mac devices
 
 ## Installation
 
+GLM 1.0.3 is vendored as `vksplat/contrib/glm-1.0.3.zip` for offline builds. CMake and pip use that archive directly; pip may also extract headers to `vksplat/contrib/glm/` (gitignored).
+
 ### Method 1: Using pip
 
 This is the recommended option if you are trying the method and want to see it working quickly/reliably.
