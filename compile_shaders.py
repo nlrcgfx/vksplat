@@ -24,10 +24,12 @@ class CompileConfig:
     generated_dst_path: Path = Path("./vksplat/shader/generated")
     # slangc_compile_args: str = "-stage compute -O3 -fp-mode fast -line-directive-mode none"
     slangc_compile_args: str = "-stage compute -O -fp-mode fast -line-directive-mode none"
+    slangc_glsl_compile_args: str = "-stage compute -fp-mode fast -line-directive-mode standard"
     glslc_compile_args: str = "-O --target-spv=spv1.5 --target-env=vulkan1.2"
     slangc_path: Optional[Path] = None
     glslc_path: Optional[Path] = None
     max_workers: Optional[int] = None
+    emit_glsl: bool = False
 
 
 @dataclass
@@ -41,10 +43,16 @@ class ShaderCompiler:
     def __init__(self, config: CompileConfig):
         self.config = config
         self.slangc = self._find_slangc()
-        self.glslc = self._find_glslc()
-        
+        self._glslc: Optional[Path] = None
+
         self.config.shader_dst_path.mkdir(exist_ok=True)
         self.config.generated_dst_path.mkdir(exist_ok=True)
+
+    @property
+    def glslc(self) -> Path:
+        if self._glslc is None:
+            self._glslc = self._find_glslc()
+        return self._glslc
 
     def _find_slangc(self) -> Path:
         """Find slangc executable"""
@@ -81,7 +89,7 @@ class ShaderCompiler:
         
         raise RuntimeError("glslc not found. Please install glslc or specify path with --glslc")
 
-    def _compute_checksum(self, files: List[Path]) -> str:
+    def _compute_checksum(self, files: List[Path], for_glsl: bool = False) -> str:
         """Compute MD5 checksum of multiple files"""
         files_expanded = []
         for path in files:
@@ -102,8 +110,11 @@ class ShaderCompiler:
                 hasher.update(f.read())
         with open(__file__, 'rb') as f:
             hasher.update(f.read())
-        hasher.update(bytearray(self.config.slangc_compile_args, 'utf-8'))
-        hasher.update(bytearray(self.config.glslc_compile_args, 'utf-8'))
+        if for_glsl:
+            hasher.update(bytearray(self.config.slangc_glsl_compile_args, 'utf-8'))
+        else:
+            hasher.update(bytearray(self.config.slangc_compile_args, 'utf-8'))
+            hasher.update(bytearray(self.config.glslc_compile_args, 'utf-8'))
         return hasher.hexdigest()
 
     def _should_compile(self, checksum_key: str, checksum: str) -> bool:
@@ -137,7 +148,11 @@ class ShaderCompiler:
         
         # Add target and other args
         cmd.extend(["-target", target])
-        cmd.extend(self.config.slangc_compile_args.split())
+        compile_args = (
+            self.config.slangc_glsl_compile_args if target == "glsl"
+            else self.config.slangc_compile_args
+        )
+        cmd.extend(compile_args.split())
         cmd.extend(["-o", str(output_file)])
         
         output = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -171,11 +186,11 @@ class ShaderCompiler:
                 output = self._compile_shader_glsl(source_file, job, target, ext)
             if output.stdout != "" or output.stderr != "":
                 return False, f"O Compiled {job_name} with warning: {output.stdout} {output.stderr}"
-            return True, f"✓ Compiled {job_name}"
+            return True, f"[OK] Compiled {job_name}"
         except subprocess.CalledProcessError as e:
-            return False, f"✗ Failed to compile {job_name}: {e.stderr}"
+            return False, f"[FAILED] Failed to compile {job_name}: {e.stderr}"
         except Exception as e:
-            return False, f"✗ Error compiling {job_name}: {str(e)}"
+            return False, f"[FAILED] Error compiling {job_name}: {str(e)}"
 
     def _create_shader_jobs(self) -> List[Tuple[str, List[ShaderJob]]]:
         """Create all shader compilation jobs grouped by category"""
@@ -303,20 +318,36 @@ class ShaderCompiler:
                 if not shader_jobs:
                     continue
 
-                checksum = self._compute_checksum([source_file] + deps)
-                checksum_key = source_file#.rstrip('.slang')
-                
-                if not force and not self._should_compile(checksum_key, checksum):
+                checksum_key = source_file
+                spirv_checksum = self._compute_checksum([source_file] + deps)
+                spirv_needed = force or self._should_compile(checksum_key, spirv_checksum)
+
+                glsl_needed = False
+                if self.config.emit_glsl and '.' in source_file:
+                    glsl_checksum = self._compute_checksum([source_file] + deps, for_glsl=True)
+                    glsl_needed = force or self._should_compile(
+                        f"{checksum_key}#glsl", glsl_checksum
+                    )
+
+                if not spirv_needed and not glsl_needed:
                     continue
-                
+
                 print(f">>> Adding \"{source_file}\" to compilation queue")
-                
+
                 for job in shader_jobs:
                     if '.' in source_file:
-                        futures[executor.submit(self._compile_shader, source_file, job, "spirv", "spv")] = None
-                        # futures[executor.submit(self._compile_shader, source_file, job, "glsl", "comp")] = None
+                        if spirv_needed:
+                            futures[executor.submit(
+                                self._compile_shader, source_file, job, "spirv", "spv"
+                            )] = None
+                        if glsl_needed:
+                            futures[executor.submit(
+                                self._compile_shader, source_file, job, "glsl", "comp"
+                            )] = None
                     else:
-                        futures[executor.submit(self._compile_shader, source_file, job, None, "spv")] = None
+                        futures[executor.submit(
+                            self._compile_shader, source_file, job, None, "spv"
+                        )] = None
 
             for future in concurrent.futures.as_completed(futures):
                 success, message = future.result()
@@ -337,25 +368,30 @@ def main():
                        help="Destination directory for compiled shaders")
     parser.add_argument("-j", "--jobs", type=int, help="Number of parallel jobs")
     parser.add_argument("--force", action="store_true", help="Force recompilation of all shaders")
-    
+    parser.add_argument(
+        "--emit-glsl", action="store_true",
+        help="Emit GLSL intermediate (.comp) for every Slang shader alongside SPIR-V"
+    )
+
     args = parser.parse_args()
-    
+
     config = CompileConfig(
         slang_src_path=args.src,
         shader_dst_path=args.dst,
         generated_dst_path=(args.dst / "generated"),
         slangc_path=args.slangc,
         glslc_path=args.glslc,
-        max_workers=args.jobs
+        max_workers=args.jobs,
+        emit_glsl=args.emit_glsl,
     )
     compiler = ShaderCompiler(config)
     success = compiler.compile_all(force=args.force)
     
     if success:
-        print("✓ All shaders compiled successfully!")
+        print("[OK] All shaders compiled successfully!")
         sys.exit(0)
     else:
-        print("✗ Some shaders failed to compile!")
+        print("[FAILED] Some shaders failed to compile!")
         sys.exit(1)
 
 
