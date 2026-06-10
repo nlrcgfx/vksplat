@@ -16,18 +16,10 @@
 #elif CUMSUM_PHASE == CUMSUM_PHASE_singlePassPrefixSum
 #define singlePassPrefixSum main
 #endif
+#include "config.slang"
 
-
-#ifndef SUBGROUP_SIZE
-#define SUBGROUP_SIZE 32
-#endif
-
-#ifndef BLOCK_SIZE
-    static const uint BLOCK_SIZE_0 = 1024;
-    #define BLOCK_SIZE min(BLOCK_SIZE_0, SUBGROUP_SIZE*SUBGROUP_SIZE*SUBGROUP_SIZE)
-#else
-    static const uint BLOCK_SIZE_0 = BLOCK_SIZE;
-#endif
+static const uint BLOCK_SIZE_0 = VKSPLAT_CUMSUM_BLOCK_SIZE;
+#define BLOCK_SIZE min(BLOCK_SIZE_0, SUBGROUP_SIZE*SUBGROUP_SIZE*SUBGROUP_SIZE)
 
 
 layout(binding=0) StructuredBuffer<int32_t> g_input;

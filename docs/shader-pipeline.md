@@ -720,6 +720,29 @@ Instrumented stage names in `perf_timer.h` (`PERF_TIMER_TRAIN_STAGES`) map 1:1 t
 
 ---
 
+## Configuration Propagation
+
+Propagated shader/C++ constants are centralized in `vksplat/src/vksplat_config.h`. Do not hand-edit duplicated values in Slang, GLSL, or C++ dispatch code.
+
+The generated shader fragments are:
+
+- `vksplat/slang/config_generated.slang`
+- `vksplat/shader/radix_sort/config_generated.glsl`
+- `vksplat/shader/generated/shader_config.json`
+
+Run `python compile_shaders.py` from the repository root to regenerate config fragments and compile shaders. Run `python vksplat/scripts/generate_shader_config.py --check` in CI or before release to verify generated config is current.
+
+CMake exposes matching C++/shader emulation options:
+
+- `VKSPLAT_EMULATE_INT64`
+- `VKSPLAT_EMULATE_F32_ATOMIC`
+
+After configuring CMake, the optional `vksplat_compile_shaders` target regenerates config and compiles shaders when Python plus shader tools are available.
+
+Runtime initialization reads `shader_config.json` when present and fails if generated shader constants do not match the compiled C++ constants.
+
+---
+
 ## Maintenance
 
 When adding or changing shaders:
@@ -731,4 +754,4 @@ When adding or changing shaders:
 5. Recompile: `python compile_shaders.py` (use `--force` to bypass cache).
 6. Update this document: relevant subgraph section + shader index appendix.
 
-For device-specific behavior (emulated int64, emulated f32 atomics), adjust macros in `vksplat/slang/config.slang` and recompile shaders.
+For device-specific behavior (emulated int64, emulated f32 atomics), change `vksplat/src/vksplat_config.h` defaults or configure CMake with the matching `VKSPLAT_EMULATE_*` options, then regenerate and recompile shaders.

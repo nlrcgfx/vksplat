@@ -260,8 +260,8 @@ public:
         uniforms.fy = fy;
         uniforms.cx = cx;
         uniforms.cy = cy;
-        uniforms.grid_height = _CEIL_DIV(image_height, TILE_HEIGHT);
-        uniforms.grid_width = _CEIL_DIV(image_width, TILE_WIDTH);
+        uniforms.grid_height = _CEIL_DIV(image_height, VKSPLAT_TILE_HEIGHT);
+        uniforms.grid_width = _CEIL_DIV(image_width, VKSPLAT_TILE_WIDTH);
 
         // row/column major matrix conversion
         const float* transform_ptr = static_cast<float*>(transform_buf.ptr);
@@ -652,7 +652,11 @@ PYBIND11_MODULE(vksplat, m) {
         .DEF_BUFFER_0(scales, scales_opacs, float, 4, (size_t)-1, "", 3, 0)
         .DEF_BUFFER_0(opacities, scales_opacs, float, 4, (size_t)-1, "", 1, 3)
         .DEF_BUFFER_ARRAY(tiles_touched, int32_t, (size_t)(-1))
-        .DEF_BUFFER_ARRAY(rect_tile_space, int64_t, (size_t)(-1))
+#if VKSPLAT_USE_EMULATED_INT64
+        .DEF_BUFFER_ARRAY(rect_tile_space, rectTileSpace_t, VKSPLAT_RECT_TILE_SPACE_WORDS)
+#else
+        .DEF_BUFFER_ARRAY(rect_tile_space, rectTileSpace_t, (size_t)(-1))
+#endif
         .DEF_BUFFER_ARRAY(radii, int32_t, (size_t)(-1))
         .DEF_BUFFER_ARRAY(xy_vs, float, 2)
         .DEF_BUFFER_ARRAY(depths, float, 1)

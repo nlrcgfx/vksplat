@@ -1,0 +1,365 @@
+#!/usr/bin/env python3
+"""Generate shader-side config fragments from vksplat_config.h."""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import operator
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+VKSPLAT_DIR = SCRIPT_PATH.parents[1]
+PROJECT_ROOT = VKSPLAT_DIR.parent
+
+DEFAULT_HEADER = VKSPLAT_DIR / "src" / "vksplat_config.h"
+DEFAULT_SLANG_OUT = VKSPLAT_DIR / "slang" / "config_generated.slang"
+DEFAULT_GLSL_OUT = VKSPLAT_DIR / "shader" / "radix_sort" / "config_generated.glsl"
+DEFAULT_JSON_OUT = VKSPLAT_DIR / "shader" / "generated" / "shader_config.json"
+
+
+DEFINE_RE = re.compile(r"^#define\s+(VKSPLAT_[A-Za-z0-9_]+)\s+(.+?)\s*$")
+TENSOR_RE = re.compile(
+    r"VKSPLAT_TENSOR_BWD_CONFIG_(\d+)_(USE_SUBGROUP_OPERATIONS|SPLAT_BATCH_SIZE|GROUP_REDUCE_BEFORE_ATOMIC)"
+)
+
+
+class EvalError(ValueError):
+    pass
+
+
+def _strip_comment(value: str) -> str:
+    return value.split("//", 1)[0].strip()
+
+
+def _parse_defines(header_path: Path) -> dict[str, str]:
+    defines: dict[str, str] = {}
+    for line in header_path.read_text(encoding="utf-8").splitlines():
+        match = DEFINE_RE.match(line.strip())
+        if not match:
+            continue
+        name, value = match.groups()
+        defines[name] = _strip_comment(value)
+    return defines
+
+
+def _safe_eval(expr: str, values: dict[str, int]) -> int:
+    expr = expr.replace("\\", " ")
+    expr = expr.replace("||", " or ").replace("&&", " and ")
+    for name, value in sorted(values.items(), key=lambda item: -len(item[0])):
+        expr = re.sub(rf"\b{name}\b", str(value), expr)
+
+    allowed_binops = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.FloorDiv: operator.floordiv,
+        ast.Div: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.LShift: operator.lshift,
+        ast.RShift: operator.rshift,
+        ast.BitOr: operator.or_,
+        ast.BitAnd: operator.and_,
+    }
+    allowed_unary = {
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+        ast.Invert: operator.invert,
+    }
+
+    def visit(node: ast.AST) -> int:
+        if isinstance(node, ast.Expression):
+            return visit(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return int(node.value)
+        if isinstance(node, ast.Name):
+            raise EvalError(f"unresolved macro {node.id!r} in expression {expr!r}")
+        if isinstance(node, ast.BinOp) and type(node.op) in allowed_binops:
+            return int(allowed_binops[type(node.op)](visit(node.left), visit(node.right)))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in allowed_unary:
+            return int(allowed_unary[type(node.op)](visit(node.operand)))
+        if isinstance(node, ast.Compare):
+            left = visit(node.left)
+            result = True
+            for op, comparator in zip(node.ops, node.comparators):
+                right = visit(comparator)
+                if isinstance(op, ast.Eq):
+                    result = result and (left == right)
+                elif isinstance(op, ast.NotEq):
+                    result = result and (left != right)
+                else:
+                    raise EvalError(f"unsupported comparison in expression {expr!r}")
+                left = right
+            return int(result)
+        if isinstance(node, ast.BoolOp):
+            values_ = [bool(visit(value)) for value in node.values]
+            if isinstance(node.op, ast.And):
+                return int(all(values_))
+            if isinstance(node.op, ast.Or):
+                return int(any(values_))
+        raise EvalError(f"unsupported expression {expr!r}")
+
+    return visit(ast.parse(expr, mode="eval"))
+
+
+def _resolve_defines(defines: dict[str, str]) -> dict[str, int]:
+    values: dict[str, int] = {}
+    pending = dict(defines)
+    changed = True
+    while pending and changed:
+        changed = False
+        for name, expr in list(pending.items()):
+            try:
+                values[name] = _safe_eval(expr, values)
+            except EvalError:
+                continue
+            del pending[name]
+            changed = True
+
+    if pending:
+        names = ", ".join(sorted(pending))
+        raise EvalError(f"could not resolve config macros: {names}")
+    return values
+
+
+def _tensor_configs(values: dict[str, int]) -> list[dict[str, int]]:
+    count = values["VKSPLAT_TENSOR_BWD_CONFIG_COUNT"]
+    configs: list[dict[str, int]] = []
+    tile_size = values["VKSPLAT_TILE_SIZE"]
+    for idx in range(count):
+        prefix = f"VKSPLAT_TENSOR_BWD_CONFIG_{idx}_"
+        use_subgroup = values[prefix + "USE_SUBGROUP_OPERATIONS"]
+        splat_batch = values[prefix + "SPLAT_BATCH_SIZE"]
+        group_reduce = values[prefix + "GROUP_REDUCE_BEFORE_ATOMIC"]
+
+        words = 0
+        words += tile_size * 1
+        words += tile_size * 2
+        words += tile_size * 4
+        words += tile_size * 3
+        words += tile_size * splat_batch * 2
+        if not use_subgroup:
+            words += tile_size * 6
+            words += tile_size * 3
+        if group_reduce > 0:
+            words += tile_size * 6
+            if use_subgroup:
+                words += tile_size * 3
+
+        configs.append(
+            {
+                "use_subgroup_operations": use_subgroup,
+                "splat_batch_size": splat_batch,
+                "group_reduce_before_atomic": group_reduce,
+                "min_shared_mem": words * 4,
+            }
+        )
+    return configs
+
+
+def _slang_key_type(bits: int) -> str:
+    if bits == 32:
+        return "uint32_t"
+    if bits == 64:
+        return "uint64_t"
+    raise ValueError("VKSPLAT_SORTING_KEY_BITS must be 32 or 64")
+
+
+def _glsl_key_type(bits: int) -> str:
+    if bits == 32:
+        return "uint32_t"
+    if bits == 64:
+        return "uint64_t"
+    raise ValueError("VKSPLAT_SORTING_KEY_BITS must be 32 or 64")
+
+
+def _render_slang(values: dict[str, int], tensor_configs: list[dict[str, int]]) -> str:
+    lines = [
+        "// Generated by vksplat/scripts/generate_shader_config.py. Do not edit.",
+        "#ifndef VKSPLAT_CONFIG_GENERATED_SLANG",
+        "#define VKSPLAT_CONFIG_GENERATED_SLANG",
+        "",
+    ]
+    for name in [
+        "VKSPLAT_SUBGROUP_SIZE",
+        "VKSPLAT_TILE_HEIGHT",
+        "VKSPLAT_TILE_WIDTH",
+        "VKSPLAT_TILE_SIZE",
+        "VKSPLAT_SH_REORDER_SIZE",
+        "VKSPLAT_USE_EMULATED_INT64",
+        "VKSPLAT_USE_EMULATED_F32_ATOMIC",
+        "VKSPLAT_SORTING_KEY_BITS",
+        "VKSPLAT_RECT_TILE_SPACE_WORDS",
+        "VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE",
+        "VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS",
+        "VKSPLAT_CUMSUM_BLOCK_SIZE",
+        "VKSPLAT_SUM_BLOCK_SIZE",
+        "VKSPLAT_WHERE_BLOCK_SIZE",
+        "VKSPLAT_DEFAULT_GROUP_SIZE",
+        "VKSPLAT_MCMC_GROUP_SIZE",
+        "VKSPLAT_MCMC_GROUP_SIZE_SPARSE",
+        "VKSPLAT_MORTON_STATS_THREADS",
+        "VKSPLAT_MORTON_GENERATE_KEYS_THREADS",
+        "VKSPLAT_MORTON_APPLY_THREADS",
+        "VKSPLAT_MORTON_SORT_KEY_BITS",
+        "VKSPLAT_RASTERIZE_BWD_PER_SPLAT_THREADS",
+        "VKSPLAT_SSIM_BLOCK_X",
+        "VKSPLAT_SSIM_BLOCK_Y",
+        "VKSPLAT_SSIM_HALO",
+        "VKSPLAT_TENSOR_BWD_CONFIG_COUNT",
+    ]:
+        lines.append(f"#define {name} {values[name]}")
+
+    lines.extend(
+        [
+            "",
+            "#define SUBGROUP_SIZE VKSPLAT_SUBGROUP_SIZE",
+            "#define TILE_HEIGHT VKSPLAT_TILE_HEIGHT",
+            "#define TILE_WIDTH VKSPLAT_TILE_WIDTH",
+            "#define TILE_SIZE VKSPLAT_TILE_SIZE",
+            "#define SH_REORDER_SIZE VKSPLAT_SH_REORDER_SIZE",
+            "#define USE_EMULATED_INT64 VKSPLAT_USE_EMULATED_INT64",
+            "#define USE_EMULATED_F32_ATOMIC VKSPLAT_USE_EMULATED_F32_ATOMIC",
+            f"#define sortingKey_t {_slang_key_type(values['VKSPLAT_SORTING_KEY_BITS'])}",
+            "",
+        ]
+    )
+
+    for idx, config in enumerate(tensor_configs):
+        lines.extend(
+            [
+                f"#define VKSPLAT_TENSOR_BWD_CONFIG_{idx}_USE_SUBGROUP_OPERATIONS {config['use_subgroup_operations']}",
+                f"#define VKSPLAT_TENSOR_BWD_CONFIG_{idx}_SPLAT_BATCH_SIZE {config['splat_batch_size']}",
+                f"#define VKSPLAT_TENSOR_BWD_CONFIG_{idx}_GROUP_REDUCE_BEFORE_ATOMIC {config['group_reduce_before_atomic']}",
+                f"#define VKSPLAT_TENSOR_BWD_CONFIG_{idx}_MIN_SHARED_MEM {config['min_shared_mem']}",
+            ]
+        )
+
+    lines.extend(["", "#endif", ""])
+    return "\n".join(lines)
+
+
+def _render_glsl(values: dict[str, int]) -> str:
+    bits = values["VKSPLAT_SORTING_KEY_BITS"]
+    return "\n".join(
+        [
+            "// Generated by vksplat/scripts/generate_shader_config.py. Do not edit.",
+            "#ifndef VKSPLAT_CONFIG_GENERATED_GLSL",
+            "#define VKSPLAT_CONFIG_GENERATED_GLSL",
+            "",
+            f"#define SUBGROUP_SIZE {values['VKSPLAT_SUBGROUP_SIZE']}",
+            f"#define KEY_BITS {bits}",
+            f"#define keyType {_glsl_key_type(bits)}",
+            f"const int RADIX = {values['VKSPLAT_RADIX_SORT_RADIX']};",
+            f"#define WORKGROUP_SIZE {values['VKSPLAT_RADIX_WORKGROUP_SIZE']}",
+            f"#define PARTITION_DIVISION {values['VKSPLAT_RADIX_PARTITION_DIVISION']}",
+            "const int PARTITION_SIZE = PARTITION_DIVISION * WORKGROUP_SIZE;",
+            "",
+            "#endif",
+            "",
+        ]
+    )
+
+
+def _build_json(values: dict[str, int], tensor_configs: list[dict[str, int]]) -> dict[str, Any]:
+    return {
+        "schema": 1,
+        "subgroup_size": values["VKSPLAT_SUBGROUP_SIZE"],
+        "tile_height": values["VKSPLAT_TILE_HEIGHT"],
+        "tile_width": values["VKSPLAT_TILE_WIDTH"],
+        "tile_size": values["VKSPLAT_TILE_SIZE"],
+        "sh_reorder_size": values["VKSPLAT_SH_REORDER_SIZE"],
+        "use_emulated_int64": values["VKSPLAT_USE_EMULATED_INT64"],
+        "use_emulated_f32_atomic": values["VKSPLAT_USE_EMULATED_F32_ATOMIC"],
+        "sorting_key_bits": values["VKSPLAT_SORTING_KEY_BITS"],
+        "rect_tile_space_words": values["VKSPLAT_RECT_TILE_SPACE_WORDS"],
+        "shader_requires_int64": int(
+            (values["VKSPLAT_USE_EMULATED_INT64"] == 0)
+            or (values["VKSPLAT_SORTING_KEY_BITS"] == 64)
+        ),
+        "radix_sort_radix": values["VKSPLAT_RADIX_SORT_RADIX"],
+        "radix_workgroup_size": values["VKSPLAT_RADIX_WORKGROUP_SIZE"],
+        "radix_partition_division": values["VKSPLAT_RADIX_PARTITION_DIVISION"],
+        "radix_partition_size": values["VKSPLAT_RADIX_PARTITION_SIZE"],
+        "tensor_backward_config_count": len(tensor_configs),
+        "tensor_backward_configs": tensor_configs,
+    }
+
+
+def _apply_overrides(values: dict[str, int], emulate_int64: int | None, emulate_f32_atomic: int | None) -> None:
+    if emulate_int64 is not None:
+        values["VKSPLAT_USE_EMULATED_INT64"] = int(emulate_int64)
+        values["VKSPLAT_RECT_TILE_SPACE_WORDS"] = 2 if emulate_int64 else 1
+    if emulate_f32_atomic is not None:
+        values["VKSPLAT_USE_EMULATED_F32_ATOMIC"] = int(emulate_f32_atomic)
+
+
+def generate_shader_config(
+    header: Path = DEFAULT_HEADER,
+    slang_out: Path = DEFAULT_SLANG_OUT,
+    glsl_out: Path = DEFAULT_GLSL_OUT,
+    json_out: Path = DEFAULT_JSON_OUT,
+    emulate_int64: int | None = None,
+    emulate_f32_atomic: int | None = None,
+    check: bool = False,
+) -> dict[str, Any]:
+    defines = _parse_defines(header)
+    values = _resolve_defines(defines)
+    _apply_overrides(values, emulate_int64, emulate_f32_atomic)
+    tensor_configs = _tensor_configs(values)
+
+    outputs = {
+        slang_out: _render_slang(values, tensor_configs),
+        glsl_out: _render_glsl(values),
+        json_out: json.dumps(_build_json(values, tensor_configs), indent=2) + "\n",
+    }
+
+    if check:
+        mismatches = [
+            path
+            for path, expected in outputs.items()
+            if not path.exists() or path.read_text(encoding="utf-8") != expected
+        ]
+        if mismatches:
+            paths = "\n".join(str(path) for path in mismatches)
+            raise SystemExit(f"generated shader config is out of date:\n{paths}")
+    else:
+        for path, content in outputs.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists():
+                path.unlink()
+            path.write_text(content, encoding="utf-8")
+
+    return json.loads(outputs[json_out])
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--header", type=Path, default=DEFAULT_HEADER)
+    parser.add_argument("--slang-out", type=Path, default=DEFAULT_SLANG_OUT)
+    parser.add_argument("--glsl-out", type=Path, default=DEFAULT_GLSL_OUT)
+    parser.add_argument("--json-out", type=Path, default=DEFAULT_JSON_OUT)
+    parser.add_argument("--emulate-int64", type=int, choices=[0, 1], default=None)
+    parser.add_argument("--emulate-f32-atomic", type=int, choices=[0, 1], default=None)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    generate_shader_config(
+        header=args.header,
+        slang_out=args.slang_out,
+        glsl_out=args.glsl_out,
+        json_out=args.json_out,
+        emulate_int64=args.emulate_int64,
+        emulate_f32_atomic=args.emulate_f32_atomic,
+        check=args.check,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

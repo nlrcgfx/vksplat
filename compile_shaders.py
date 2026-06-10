@@ -15,6 +15,10 @@ import argparse
 import shutil
 import json
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR / "vksplat" / "scripts"))
+from generate_shader_config import generate_shader_config
+
 
 @dataclass
 class CompileConfig:
@@ -22,6 +26,8 @@ class CompileConfig:
     slang_src_path: Path = Path("./vksplat/slang")
     shader_dst_path: Path = Path("./vksplat/shader")
     generated_dst_path: Path = Path("./vksplat/shader/generated")
+    config_header_path: Path = Path("./vksplat/src/vksplat_config.h")
+    config_generator_path: Path = Path("./vksplat/scripts/generate_shader_config.py")
     # slangc_compile_args: str = "-stage compute -O3 -fp-mode fast -line-directive-mode none"
     slangc_compile_args: str = "-stage compute -O -fp-mode fast -line-directive-mode none"
     slangc_glsl_compile_args: str = "-stage compute -fp-mode fast -line-directive-mode standard"
@@ -30,6 +36,8 @@ class CompileConfig:
     glslc_path: Optional[Path] = None
     max_workers: Optional[int] = None
     emit_glsl: bool = False
+    emulate_int64: Optional[int] = None
+    emulate_f32_atomic: Optional[int] = None
 
 
 @dataclass
@@ -42,11 +50,23 @@ class ShaderJob:
 class ShaderCompiler:
     def __init__(self, config: CompileConfig):
         self.config = config
-        self.slangc = self._find_slangc()
-        self._glslc: Optional[Path] = None
 
         self.config.shader_dst_path.mkdir(exist_ok=True)
         self.config.generated_dst_path.mkdir(exist_ok=True)
+        self.shader_config = self._generate_shader_config()
+
+        self.slangc = self._find_slangc()
+        self._glslc: Optional[Path] = None
+
+    def _generate_shader_config(self) -> Dict:
+        return generate_shader_config(
+            header=self.config.config_header_path,
+            slang_out=self.config.slang_src_path / "config_generated.slang",
+            glsl_out=self.config.shader_dst_path / "radix_sort" / "config_generated.glsl",
+            json_out=self.config.generated_dst_path / "shader_config.json",
+            emulate_int64=self.config.emulate_int64,
+            emulate_f32_atomic=self.config.emulate_f32_atomic,
+        )
 
     @property
     def glslc(self) -> Path:
@@ -110,6 +130,14 @@ class ShaderCompiler:
                 hasher.update(f.read())
         with open(__file__, 'rb') as f:
             hasher.update(f.read())
+        for extra_file in [
+            self.config.config_header_path,
+            self.config.config_generator_path,
+            self.config.generated_dst_path / "shader_config.json",
+        ]:
+            if extra_file.exists():
+                with open(extra_file, 'rb') as f:
+                    hasher.update(f.read())
         if for_glsl:
             hasher.update(bytearray(self.config.slangc_glsl_compile_args, 'utf-8'))
         else:
@@ -141,6 +169,8 @@ class ShaderCompiler:
         cmd = [str(self.slangc), source_file]
         job_name = job.name + '.' + ext
         output_file = self.config.generated_dst_path / job_name  # type: Path
+        if output_file.exists():
+            output_file.unlink()
         
         # Add defines
         for define, value in job.defines.items():
@@ -162,6 +192,8 @@ class ShaderCompiler:
         cmd = [str(self.glslc), str(self.config.shader_dst_path / source_file / job.name)]
         job_name = Path(job.name).with_suffix('.'+ext)
         output_file = self.config.shader_dst_path / source_file / job_name
+        if output_file.exists():
+            output_file.unlink()
         
         # Add defines
         for define, value in job.defines.items():
@@ -197,6 +229,7 @@ class ShaderCompiler:
         jobs = []
 
         forward, backward = 0, 1  # export modes
+        config_deps = ["config.slang", "config_generated.slang"]
 
         # Radix sort
         jobs.append(("radix_sort", [
@@ -217,7 +250,7 @@ class ShaderCompiler:
                 ("update_buffer", 4),
                 ("update_buffer_sh", 5),
             ]
-        ], ["strategy_utils.slang", "config.slang"]))
+        ], ["strategy_utils.slang"] + config_deps))
 
         # MCMC Functions
         jobs.append(("mcmc.slang", [
@@ -228,7 +261,7 @@ class ShaderCompiler:
                 ("compute_relocation_index_map", 10), ("compute_relocation", 11), ("update_relocation", 12),
                 ("compute_add_index_map", 20), ("compute_add", 21), ("update_add", 22),
             ]
-        ], ["strategy_utils.slang", "config.slang"]))
+        ], ["strategy_utils.slang"] + config_deps))
 
         # Default Densification Functions
         jobs.append(("default.slang", [
@@ -240,28 +273,28 @@ class ShaderCompiler:
                 ("prune", 5), ("prune_mean", 51), ("prune_sh", 52),
                 ("reset_opa", 6)
             ]
-        ], ["strategy_utils.slang", "config.slang"]))
+        ], ["strategy_utils.slang"] + config_deps))
 
         # Where (torch.where equivalent)
         jobs.append(("where.slang", [
             ShaderJob("where", {}),
-        ], []))
+        ], config_deps))
 
         # Summation
         jobs.append(("sum.slang", [
             ShaderJob("sum", {}),
-        ], []))
+        ], config_deps))
 
         # Fused projection backward and optimizer
         jobs.append(("fused_projection_backward_optimizer.slang", [
             ShaderJob("fused_projection_backward_optimizer", {"EXPORT_MODE": backward}),
-        ], ["config.slang", "utils.slang", "spherical_harmonics.slang"]))
+        ], config_deps + ["utils.slang", "spherical_harmonics.slang"]))
 
         # SSIM
         jobs.append(("ssim.slang", [
             ShaderJob("ssim_forward", {"EXPORT_MODE": forward}),
             ShaderJob("ssim_backward", {"EXPORT_MODE": backward}),
-        ], ["config.slang"]))
+        ], config_deps))
 
         # Prefix Sum
         jobs.append(("cumsum.slang", [
@@ -272,10 +305,17 @@ class ShaderCompiler:
                 ("block_scan", 1), ("scan_block_sums", 2),
                 ("add_block_offsets", 3), ("single_pass", 0)
             ]
-        ], []))
+        ], config_deps))
 
         # Alpha Blending
-        tensor_bwd_configs = [(0, 8, 0), (0, 8, 8), (1, 16, 0)]
+        tensor_bwd_configs = [
+            (
+                cfg["use_subgroup_operations"],
+                cfg["splat_batch_size"],
+                cfg["group_reduce_before_atomic"],
+            )
+            for cfg in self.shader_config["tensor_backward_configs"]
+        ]
         jobs.append(("alphablend_shader.slang", [
             ShaderJob(f"rasterize_forward", {"EXPORT_MODE": forward}),
         ] + [
@@ -286,7 +326,7 @@ class ShaderCompiler:
                 "GROUP_REDUCE_BEFORE_ATOMIC": tensor_bwd_configs[max(i-2,0)][2],
             })
             for i in range(2+len(tensor_bwd_configs))
-        ], ["config.slang", "utils.slang",
+        ], config_deps + ["utils.slang",
             "alphablend_shader_bwd_per_pixel.slang",
             "alphablend_shader_bwd_per_splat.slang",
             "alphablend_shader_bwd_tensor.slang"
@@ -296,12 +336,12 @@ class ShaderCompiler:
         jobs.append(("tile_shader.slang", [
             ShaderJob(f"generate_keys", {"EXPORT_MODE": forward, "ENTRY": 1}),
             ShaderJob("compute_tile_ranges", {"EXPORT_MODE": forward, "ENTRY": 2}),
-        ], ["config.slang", "utils.slang"]))
+        ], config_deps + ["utils.slang"]))
 
         # Vertex Shader
         jobs.append(("vertex_shader.slang", [
             ShaderJob(f"projection_forward", {"EXPORT_MODE": forward}),
-        ], ["config.slang", "utils.slang", "spherical_harmonics.slang"]))
+        ], config_deps + ["utils.slang", "spherical_harmonics.slang"]))
 
         return jobs
 
@@ -372,6 +412,14 @@ def main():
         "--emit-glsl", action="store_true",
         help="Emit GLSL intermediate (.comp) for every Slang shader alongside SPIR-V"
     )
+    parser.add_argument(
+        "--emulate-int64", type=int, choices=[0, 1], default=None,
+        help="Generate shaders with USE_EMULATED_INT64 set to 0 or 1"
+    )
+    parser.add_argument(
+        "--emulate-f32-atomic", type=int, choices=[0, 1], default=None,
+        help="Generate shaders with USE_EMULATED_F32_ATOMIC set to 0 or 1"
+    )
 
     args = parser.parse_args()
 
@@ -383,6 +431,8 @@ def main():
         glslc_path=args.glslc,
         max_workers=args.jobs,
         emit_glsl=args.emit_glsl,
+        emulate_int64=args.emulate_int64,
+        emulate_f32_atomic=args.emulate_f32_atomic,
     )
     compiler = ShaderCompiler(config)
     success = compiler.compile_all(force=args.force)

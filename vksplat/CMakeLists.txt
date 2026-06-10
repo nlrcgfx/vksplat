@@ -6,6 +6,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(VKSPLAT_BUILD_PYTHON "Build pybind11 Python module" ON)
+option(VKSPLAT_EMULATE_INT64 "Compile C++ and shaders for emulated int64 tile bounds" OFF)
+option(VKSPLAT_EMULATE_F32_ATOMIC "Compile C++ and shaders for emulated f32 atomics" OFF)
+
+set(VKSPLAT_USE_EMULATED_INT64_VALUE 0)
+if(VKSPLAT_EMULATE_INT64)
+    set(VKSPLAT_USE_EMULATED_INT64_VALUE 1)
+endif()
+
+set(VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE 0)
+if(VKSPLAT_EMULATE_F32_ATOMIC)
+    set(VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE 1)
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
     add_compile_options(-Qunused-arguments)
@@ -33,6 +45,7 @@ set(VKSPLAT_CORE_SOURCES
 )
 
 set(VKSPLAT_CORE_HEADERS
+    src/vksplat_config.h
     src/config.h
     src/buffer.h
     src/colmap_reader.h
@@ -52,6 +65,11 @@ target_link_libraries(vksplat_core PRIVATE
 )
 
 target_include_directories(vksplat_core PUBLIC src)
+
+target_compile_definitions(vksplat_core PUBLIC
+    VKSPLAT_USE_EMULATED_INT64=${VKSPLAT_USE_EMULATED_INT64_VALUE}
+    VKSPLAT_USE_EMULATED_F32_ATOMIC=${VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
+)
 
 target_link_libraries(vksplat_core PUBLIC
     Vulkan::Headers
@@ -107,6 +125,36 @@ if(VKSPLAT_BUILD_PYTHON)
     )
 
     install(TARGETS vksplat DESTINATION .)
+endif()
+
+find_package(Python COMPONENTS Interpreter QUIET)
+if(Python_Interpreter_FOUND)
+    add_custom_target(vksplat_generate_shader_config
+        COMMAND ${Python_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_shader_config.py
+            --header ${CMAKE_CURRENT_SOURCE_DIR}/src/vksplat_config.h
+            --slang-out ${CMAKE_CURRENT_SOURCE_DIR}/slang/config_generated.slang
+            --glsl-out ${CMAKE_CURRENT_SOURCE_DIR}/shader/radix_sort/config_generated.glsl
+            --json-out ${CMAKE_CURRENT_SOURCE_DIR}/shader/generated/shader_config.json
+            --emulate-int64 ${VKSPLAT_USE_EMULATED_INT64_VALUE}
+            --emulate-f32-atomic ${VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+        COMMENT "Generating VkSplat shader config"
+        VERBATIM
+    )
+
+    add_custom_target(vksplat_compile_shaders
+        COMMAND ${Python_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../compile_shaders.py
+            --src ${CMAKE_CURRENT_SOURCE_DIR}/slang
+            --dst ${CMAKE_CURRENT_SOURCE_DIR}/shader
+            --emulate-int64 ${VKSPLAT_USE_EMULATED_INT64_VALUE}
+            --emulate-f32-atomic ${VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+        COMMENT "Compiling VkSplat shaders"
+        VERBATIM
+    )
+    add_dependencies(vksplat_compile_shaders vksplat_generate_shader_config)
 endif()
 
 include(cmake/VkSplatCompileCommands.cmake)

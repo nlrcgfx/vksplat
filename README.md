@@ -88,6 +88,14 @@ cmake --build --preset release
 
 Debug build: replace `release` with `debug`. On Windows, run from a Visual Studio Developer shell so Ninja can find MSVC.
 
+Optional shader/device compatibility flags:
+
+```bash
+cmake --preset release -DVKSPLAT_EMULATE_INT64=ON -DVKSPLAT_EMULATE_F32_ATOMIC=ON
+cmake --build --preset release
+cmake --build build/release --target vksplat_compile_shaders
+```
+
 OpenHarmony cross-compile (requires `OHOS_SDK_NATIVE` pointing at the SDK `native` directory):
 
 ```bash
@@ -122,7 +130,7 @@ Before running `simple_trainer.py`, make the following edits if needed:
 
 Running the code should create a work folder. After training, you may find training time and memory in `train.json`, metrics in `eval.json`, saved PLY file in `splat.ply`, as well as validation renders.
 
-If you see message similar to "Shaders must be compiled with USE_XXX=1" for the device you use for training, adjust `vksplat/slang/config.slang`, particularly `USE_EMULATED_INT64` and `USE_EMULATED_F32_ATOMIC` macros. You must recompile shaders for this edit to take effect (see "Recompile shaders" section below).
+If your device lacks shader int64 or float32 atomic add support, build C++ and shaders with matching emulation flags instead of editing shader files by hand. For CMake, configure with `-DVKSPLAT_EMULATE_INT64=ON` and/or `-DVKSPLAT_EMULATE_F32_ATOMIC=ON`, then recompile shaders. For direct shader compilation, pass `--emulate-int64 1` and/or `--emulate-f32-atomic 1` to `compile_shaders.py`.
 
 
 ## Development
@@ -144,11 +152,17 @@ See [docs/shader-pipeline.md](docs/shader-pipeline.md) for the GPU compute pipel
 
 ### Recompile shaders
 
+VkSplat shader/C++ propagation constants are owned by `vksplat/src/vksplat_config.h`. `compile_shaders.py` regenerates `vksplat/slang/config_generated.slang`, `vksplat/shader/radix_sort/config_generated.glsl`, and `vksplat/shader/generated/shader_config.json` before compiling.
+
 To recompile shaders after update, run `python3 compile_shaders.py` from project root directory.
 
 To force recompile all shaders without caching, use `python3 compile_shaders.py --force`.
 
-If you add new shader source files, you must update `compile_shaders.py`.
+To generate only the config fragments, run `python3 vksplat/scripts/generate_shader_config.py`. To verify generated fragments are current, run `python3 vksplat/scripts/generate_shader_config.py --check`.
+
+CMake users can run `cmake --build build/release --target vksplat_compile_shaders` after configuring. This target is optional and requires a Python interpreter plus `slangc`/`glslc`.
+
+If you add new shader source files or new propagated config knobs, update `compile_shaders.py` and `vksplat/scripts/generate_shader_config.py`.
 
 
 ### Recompile Vulkan/C++ code

@@ -1,25 +1,20 @@
 #pragma once
 
 #include <cstdint>
+#include "vksplat_config.h"
 
 #define ENABLE_VULKAN_VALIDATION_LAYER 0
 #define ENABLE_ASSERTION 0
 
-#ifndef SUBGROUP_SIZE
-#define SUBGROUP_SIZE 32
-#endif
-
-#define TILE_HEIGHT 16
-#define TILE_WIDTH 16
+#define SUBGROUP_SIZE VKSPLAT_SUBGROUP_SIZE
+#define TILE_HEIGHT VKSPLAT_TILE_HEIGHT
+#define TILE_WIDTH VKSPLAT_TILE_WIDTH
+#define TILE_SIZE VKSPLAT_TILE_SIZE
 
 // reordering for better memory colaescing
 // see config.slang for details
-#define SH_REORDER_SIZE SUBGROUP_SIZE
+#define SH_REORDER_SIZE VKSPLAT_SH_REORDER_SIZE
 // #define SH_REORDER_SIZE 1
-
-typedef int32_t sortingKey_t;
-// typedef int64_t sortingKey_t;
-
 
 #define RASTERIZE_BACKWARD_USE_SCHEDULING 1
 

@@ -1,6 +1,7 @@
-#ifndef SUBGROUP_SIZE
-#define SUBGROUP_SIZE 32
-#endif
+#ifndef VKSPLAT_CONFIG_SLANG
+#define VKSPLAT_CONFIG_SLANG
+
+#include "config_generated.slang"
 
 #define ALPHA_THRESHOLD (1.f/255.f)
 
@@ -10,10 +11,6 @@
 #define ANTIALIASE_MODE 0
 #endif
 #define AA_EPS2D 0.3
-
-#define TILE_HEIGHT 16
-#define TILE_WIDTH 16
-#define TILE_SIZE (TILE_HEIGHT*TILE_WIDTH)
 
 // 0: none
 // 1: gsplat
@@ -27,9 +24,6 @@
 #define EXPORT_MODE_VULKAN_FORWARD 0
 #define EXPORT_MODE_VULKAN_BACKWARD 1
 
-#define sortingKey_t uint32_t
-// #define sortingKey_t int64_t
-
 // SH ordering
 // Degree 3 SH gives (3+1)^2=16 coefficients, or 16×3=48 floats
 // 16×float3: [000111222...15]×N
@@ -37,7 +31,6 @@
 // Reordered 12×float4 coalesced memory access:
 // [[0000...×W][1111...×W]×12]×ceil(N/W)
 
-#define SH_REORDER_SIZE SUBGROUP_SIZE
 // #define SH_REORDER_SIZE 1
 
 
@@ -61,14 +54,6 @@
 
 static const float M_PI = 3.14159265358979;
 
-#ifndef USE_EMULATED_INT64
-#define USE_EMULATED_INT64 0
-#endif
-
-#ifndef USE_EMULATED_F32_ATOMIC
-#define USE_EMULATED_F32_ATOMIC 0
-#endif
-
 #if USE_EMULATED_F32_ATOMIC
 void AtomicAddFloat(RWByteAddressBuffer buffer, uint byteAddress, float valueToAdd) {
     uint oldInt = buffer.Load(byteAddress);
@@ -87,3 +72,5 @@ void AtomicAddFloat(RWByteAddressBuffer buffer, uint byteAddress, float valueToA
     } while (assumed != oldInt);
 }
 #endif
+
+#endif  // VKSPLAT_CONFIG_SLANG

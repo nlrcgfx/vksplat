@@ -1,7 +1,9 @@
 // Default strategy for Gaussian densification
 // Based on https://github.com/nerfstudio-project/gsplat/blob/main/gsplat/strategy/default.py
 
-#define GROUP_SIZE 256
+#include "config.slang"
+
+#define GROUP_SIZE VKSPLAT_DEFAULT_GROUP_SIZE
 
 #define DEFAULT_PHASE_UpdateState 0
 #define DEFAULT_PHASE_ComputeGrowMask 1

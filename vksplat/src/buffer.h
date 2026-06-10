@@ -79,7 +79,7 @@ struct VulkanGSPipelineBuffers {
 
     // projection outputs
     Buffer<int32_t> tiles_touched;  // (N,)
-    Buffer<int64_t> rect_tile_space;  // (N,)
+    Buffer<rectTileSpace_t> rect_tile_space;  // (N,) or (2N,) when int64 is emulated
     Buffer<int32_t> radii;  // (N,)
     Buffer<float> xy_vs;  // (N, 2)
     Buffer<float> depths;  // (N, 1)
@@ -98,9 +98,9 @@ struct VulkanGSPipelineBuffers {
       { return is_unsorted_1 ? sorting_keys_1 : sorting_keys_2; }
     Buffer<sortingKey_t>& sorted_keys()
       { return is_unsorted_1 ? sorting_keys_2 : sorting_keys_1; }
-    Buffer<sortingKey_t>& unsorted_gauss_idx()
+    Buffer<int32_t>& unsorted_gauss_idx()
       { return is_unsorted_1 ? sorting_gauss_idx_1 : sorting_gauss_idx_2; }
-    Buffer<sortingKey_t>& sorted_gauss_idx()
+    Buffer<int32_t>& sorted_gauss_idx()
       { return is_unsorted_1 ? sorting_gauss_idx_2 : sorting_gauss_idx_1; }
 
     // pixels

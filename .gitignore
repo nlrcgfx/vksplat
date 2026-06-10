@@ -8,6 +8,8 @@ build/
 # Generated SPIR-V shaders (compile_shaders.py)
 vksplat/shader/generated/
 vksplat/shader/checksum.json
+vksplat/slang/config_generated.slang
+vksplat/shader/radix_sort/config_generated.glsl
 
 # Python
 __pycache__/

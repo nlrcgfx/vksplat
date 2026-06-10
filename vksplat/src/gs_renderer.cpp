@@ -3,6 +3,10 @@
 #include <fstream>
 #include <memory>
 #include <csignal>
+#include <cctype>
+#include <filesystem>
+#include <iterator>
+#include <optional>
 
 #ifdef max
 #undef max
@@ -10,6 +14,77 @@
 #ifdef min
 #undef min
 #endif
+
+namespace {
+
+std::optional<uint32_t> readJsonUint(const std::string& json, const std::string& key) {
+    std::string token = "\"" + key + "\"";
+    size_t pos = json.find(token);
+    if (pos == std::string::npos)
+        return std::nullopt;
+    pos = json.find(':', pos + token.size());
+    if (pos == std::string::npos)
+        return std::nullopt;
+    ++pos;
+    while (pos < json.size() && std::isspace((unsigned char)json[pos]))
+        ++pos;
+    if (pos >= json.size() || !std::isdigit((unsigned char)json[pos]))
+        return std::nullopt;
+    uint32_t value = 0;
+    while (pos < json.size() && std::isdigit((unsigned char)json[pos])) {
+        value = value * 10 + (uint32_t)(json[pos] - '0');
+        ++pos;
+    }
+    return value;
+}
+
+void validateShaderConfigManifest(const std::map<std::string, std::string>& spirv_paths) {
+    auto projection = spirv_paths.find("projection_forward");
+    if (projection == spirv_paths.end())
+        return;
+
+    std::filesystem::path manifest_path =
+        std::filesystem::path(projection->second).parent_path() / "shader_config.json";
+    std::ifstream manifest(manifest_path);
+    if (!manifest)
+        return;
+
+    std::string json(
+        (std::istreambuf_iterator<char>(manifest)),
+        std::istreambuf_iterator<char>()
+    );
+
+    auto check = [&](const std::string& key, uint32_t expected) {
+        std::optional<uint32_t> actual = readJsonUint(json, key);
+        if (!actual)
+            throw std::runtime_error("Shader config manifest is missing `" + key + "`: " + manifest_path.string());
+        if (*actual != expected) {
+            throw std::runtime_error(
+                "Shader config mismatch for `" + key + "`: C++=" +
+                std::to_string(expected) + ", shader=" + std::to_string(*actual) +
+                ". Regenerate shaders from vksplat_config.h."
+            );
+        }
+    };
+
+    check("subgroup_size", VKSPLAT_SUBGROUP_SIZE);
+    check("tile_height", VKSPLAT_TILE_HEIGHT);
+    check("tile_width", VKSPLAT_TILE_WIDTH);
+    check("tile_size", VKSPLAT_TILE_SIZE);
+    check("sh_reorder_size", VKSPLAT_SH_REORDER_SIZE);
+    check("use_emulated_int64", VKSPLAT_USE_EMULATED_INT64);
+    check("use_emulated_f32_atomic", VKSPLAT_USE_EMULATED_F32_ATOMIC);
+    check("sorting_key_bits", VKSPLAT_SORTING_KEY_BITS);
+    check("rect_tile_space_words", VKSPLAT_RECT_TILE_SPACE_WORDS);
+    check("shader_requires_int64", vksplat_config::kShaderRequiresInt64 ? 1u : 0u);
+    check("radix_sort_radix", VKSPLAT_RADIX_SORT_RADIX);
+    check("radix_workgroup_size", VKSPLAT_RADIX_WORKGROUP_SIZE);
+    check("radix_partition_division", VKSPLAT_RADIX_PARTITION_DIVISION);
+    check("radix_partition_size", VKSPLAT_RADIX_PARTITION_SIZE);
+    check("tensor_backward_config_count", VKSPLAT_TENSOR_BWD_CONFIG_COUNT);
+}
+
+}  // namespace
 
 
 VulkanGSRenderer::VulkanGSRenderer()
@@ -29,23 +104,28 @@ void VulkanGSRenderer::cleanup() {
 
 VulkanGSPipeline::DeviceRequirement VulkanGSRenderer::getDeviceRequirement() {
     const uint32_t minSharedMemory = ([=]() -> uint32_t {
-        static constexpr uint32_t TILE_SIZE = TILE_HEIGHT*TILE_WIDTH;
-        uint32_t raster_backward_0 = TILE_SIZE*(9+1+1)*4;  // per pixel
-        uint32_t raster_backward_1 = TILE_SIZE*(4+4+1)*4;  // per splat
-        // uint32_t raster_backward_2 = TILE_SIZE*(1+2+4+4+6+2*8+4)*4;  // tensor 0 8 0
-        // uint32_t raster_backward_3 = TILE_SIZE*(1+2+4+4+6+2*8+4+6)*4;  // tensor 0 8 8
-        // uint32_t raster_backward_4 = TILE_SIZE*(1+2+4+4+2*16+4)*4;  // tensor 1 16 0
-        uint32_t ssim = (26*26*(2+3)+TILE_HEIGHT*TILE_WIDTH*(5+3))*4;
-        uint32_t radix_sort_rts = 4096*sizeof(sortingKey_t)+256*4;
+        constexpr uint32_t tile_size = VKSPLAT_TILE_SIZE;
+        uint32_t raster_backward_0 = tile_size*(9+1+1)*sizeof(float);  // per pixel
+        uint32_t raster_backward_1 = tile_size*(4+4+1)*sizeof(float);  // per splat
+        uint32_t ssim_shared_x = VKSPLAT_SSIM_BLOCK_X + 2 * VKSPLAT_SSIM_HALO;
+        uint32_t ssim_shared_y = VKSPLAT_SSIM_BLOCK_Y + 2 * VKSPLAT_SSIM_HALO;
+        uint32_t ssim = (
+            ssim_shared_x * ssim_shared_y * (2+3) +
+            VKSPLAT_TILE_SIZE * (5+3)
+        ) * sizeof(float);
+        uint32_t radix_sort_rts =
+            VKSPLAT_RADIX_PARTITION_SIZE * (VKSPLAT_SORTING_KEY_BITS / 32) * sizeof(uint32_t) +
+            VKSPLAT_RADIX_SORT_RADIX * sizeof(uint32_t);
+        uint32_t tensor_bwd = 0;
+        for (const auto& config : vksplat_config::kTensorBwdConfigs)
+            tensor_bwd = std::max(tensor_bwd, config.min_shared_mem);
         return std::max({
-            raster_backward_0, raster_backward_1,
-            // raster_backward_2, raster_backward_3, raster_backward_4,
-            ssim, radix_sort_rts
+            raster_backward_0, raster_backward_1, tensor_bwd, ssim, radix_sort_rts
         });
     })();
     return DeviceRequirement{
-        { 12*16777216/256, 4096/std::min(TILE_HEIGHT,TILE_WIDTH), 1 },
-        { 1024, 1*std::max(TILE_HEIGHT,TILE_WIDTH), 1 },
+        { 12*16777216/VKSPLAT_TILE_SIZE, 4096/std::min(VKSPLAT_TILE_HEIGHT,VKSPLAT_TILE_WIDTH), 1 },
+        { std::max(VKSPLAT_CUMSUM_BLOCK_SIZE, VKSPLAT_MORTON_APPLY_THREADS), 1*std::max(VKSPLAT_TILE_HEIGHT,VKSPLAT_TILE_WIDTH), 1 },
         minSharedMemory
     };
 }
@@ -54,6 +134,7 @@ VulkanGSPipeline::DeviceRequirement VulkanGSRenderer::getDeviceRequirement() {
 void VulkanGSRenderer::initialize(const std::map<std::string, std::string> &spirv_paths, int device_id) {
 
     VulkanGSPipeline::initialize(device_id);
+    validateShaderConfigManifest(spirv_paths);
     
     createComputePipeline(pipeline_projection_forward, spirv_paths.at("projection_forward"));
     createComputePipeline(pipeline_generate_keys, spirv_paths.at("generate_keys"));
@@ -62,9 +143,14 @@ void VulkanGSRenderer::initialize(const std::map<std::string, std::string> &spir
         createComputePipeline(pipeline_rasterize_forward[i], spirv_paths.at("rasterize_forward"));
         createComputePipeline(pipeline_rasterize_backward[0][i], spirv_paths.at("rasterize_backward_0"));
         createComputePipeline(pipeline_rasterize_backward[1][i], spirv_paths.at("rasterize_backward_1"));
-        createComputePipeline(pipeline_rasterize_backward[2][i], spirv_paths.at("rasterize_backward_2"), 35840);
-        createComputePipeline(pipeline_rasterize_backward[3][i], spirv_paths.at("rasterize_backward_3"), 41984);
-        createComputePipeline(pipeline_rasterize_backward[4][i], spirv_paths.at("rasterize_backward_4"), 43008);
+        for (size_t tensor_idx = 0; tensor_idx < vksplat_config::kTensorBwdConfigs.size(); ++tensor_idx) {
+            size_t impl_idx = tensor_idx + 2;
+            createComputePipeline(
+                pipeline_rasterize_backward[impl_idx][i],
+                spirv_paths.at("rasterize_backward_" + std::to_string(impl_idx)),
+                vksplat_config::kTensorBwdConfigs[tensor_idx].min_shared_mem
+            );
+        }
     }
     createComputePipeline(pipeline_cumsum.single_pass, spirv_paths.at("cumsum_single_pass"));
     createComputePipeline(pipeline_cumsum.block_scan, spirv_paths.at("cumsum_block_scan"));
@@ -101,7 +187,7 @@ void VulkanGSRenderer::executeProjectionForward(
 
     size_t alloc_size = std::max(num_splats, alloc_reserve);
     executeCompute(
-        {{num_splats, SUBGROUP_SIZE}},
+        {{num_splats, VKSPLAT_SUBGROUP_SIZE}},
         &uniforms, sizeof(uniforms),
         pipeline_projection_forward,
         {
@@ -112,7 +198,7 @@ void VulkanGSRenderer::executeProjectionForward(
             buffers.scales_opacs.deviceBuffer,
             // outputs
             resizeDeviceBuffer(buffers.tiles_touched, alloc_size),
-            resizeDeviceBuffer(buffers.rect_tile_space, alloc_size),
+            resizeDeviceBuffer(buffers.rect_tile_space, VKSPLAT_RECT_TILE_SPACE_WORDS * alloc_size),
             resizeDeviceBuffer(buffers.radii, alloc_size),
             resizeDeviceBuffer(buffers.xy_vs, 2*alloc_size),
             resizeDeviceBuffer(buffers.depths, alloc_size),
@@ -145,7 +231,7 @@ void VulkanGSRenderer::executeGenerateKeys(
     #endif
 
     executeCompute(
-        {{num_elements, 64}},
+        {{num_elements, VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE}},
         &uniforms, sizeof(uniforms),
         pipeline_generate_keys,
         {
@@ -181,7 +267,7 @@ void VulkanGSRenderer::executeComputeTileRanges(
     uniforms_1.active_sh = (uint32_t)num_indices;  // alias memory
 
     executeCompute(
-        {{num_indices+1, 256}},
+        {{num_indices+1, VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS}},
         &uniforms_1, sizeof(uniforms),
         pipeline_compute_tile_ranges[buffers.is_unsorted_1],
         {
@@ -212,7 +298,7 @@ void VulkanGSRenderer::executeRasterizeForward(
     }, COMPUTE_SHADER_READ);
 
     executeCompute(
-        {{uniforms.image_width, TILE_WIDTH}, {uniforms.image_height, TILE_HEIGHT}},
+        {{uniforms.image_width, VKSPLAT_TILE_WIDTH}, {uniforms.image_height, VKSPLAT_TILE_HEIGHT}},
         &uniforms, sizeof(uniforms),
         pipeline_rasterize_forward[buffers.is_unsorted_1],
         std::vector<_VulkanBuffer>({
@@ -335,7 +421,7 @@ void VulkanGSRenderer::executeRasterizeBackward(
 
     std::vector<std::pair<size_t, size_t>> dims;
     if (scheduled_impl == RasterBackwardImpl::PerPixel)
-        dims = {{(int)uniforms.image_width, TILE_WIDTH}, {(int)uniforms.image_height, TILE_HEIGHT}};
+        dims = {{(int)uniforms.image_width, VKSPLAT_TILE_WIDTH}, {(int)uniforms.image_height, VKSPLAT_TILE_HEIGHT}};
     else
         dims = {{uniforms.grid_width*uniforms.grid_height, 1}};
 
@@ -373,8 +459,8 @@ void VulkanGSRenderer::executeCumsum(
     DEVICE_GUARD;
 
     size_t num_elements = input_buffer.deviceSize();
-    const size_t block_0 = 1024;
-    const size_t block_limit = deviceInfo.subgroupSize*deviceInfo.subgroupSize*deviceInfo.subgroupSize;
+    const size_t block_0 = VKSPLAT_CUMSUM_BLOCK_SIZE;
+    const size_t block_limit = VKSPLAT_SUBGROUP_SIZE*VKSPLAT_SUBGROUP_SIZE*VKSPLAT_SUBGROUP_SIZE;
     const size_t block = std::min(block_0, block_limit);
 
     uint32_t uniforms[2] = {
@@ -560,18 +646,16 @@ void VulkanGSRenderer::executeSort(
     if (num_elements != buffers.unsorted_gauss_idx().deviceSize())
         _THROW_ERROR("number of elements don't match in executeSort");
 
-    const int RADIX = 256;
-    const int WORKGROUP_SIZE = 512;
-    const int PARTITION_DIVISION = 8;
-    const int PARTITION_SIZE = PARTITION_DIVISION * WORKGROUP_SIZE;
+    const int RADIX = VKSPLAT_RADIX_SORT_RADIX;
+    const int PARTITION_SIZE = VKSPLAT_RADIX_PARTITION_SIZE;
 
     auto& globalHistogram = buffers._sorting_histogram;
     auto& partitionHistogram = buffers._sorting_histogram_cumsum;
 
     const size_t num_parts = _CEIL_DIV(num_elements, PARTITION_SIZE);
 
-    int max_nonzero_bit = 8*sizeof(sortingKey_t);
-    if (num_bits == -1 && sizeof(sortingKey_t) == 8) {
+    int max_nonzero_bit = VKSPLAT_SORTING_KEY_BITS;
+    if (num_bits == -1 && VKSPLAT_SORTING_KEY_BITS == 64) {
         int32_t num_tiles = (int32_t)(uniforms.grid_height*uniforms.grid_width);
         max_nonzero_bit = 23;  // float fraction bits
         int32_t temp = num_tiles;
@@ -580,19 +664,19 @@ void VulkanGSRenderer::executeSort(
     }
     else if (num_bits >= 0)
         max_nonzero_bit = num_bits;
-    int num_passes = _CEIL_DIV(max_nonzero_bit, 8);
+    int num_passes = _CEIL_DIV(max_nonzero_bit, VKSPLAT_RADIX_BITS_PER_PASS);
 
     resizeDeviceBuffer(partitionHistogram, num_parts*RADIX);
     resizeDeviceBuffer(buffers.sorted_keys(), num_elements);
     resizeDeviceBuffer(buffers.sorted_gauss_idx(), num_elements);
 
     DEVICE_GUARD;
-    clearDeviceBuffer(globalHistogram, num_passes * sizeof(sortingKey_t)*RADIX);
+    clearDeviceBuffer(globalHistogram, num_passes * RADIX);
     bufferMemoryBarrier({
         { globalHistogram.deviceBuffer, TRANSFER_WRITE },
     }, COMPUTE_SHADER_READ_WRITE);
 
-    for (int pass = 0; 8*pass < max_nonzero_bit; pass++) {
+    for (int pass = 0; VKSPLAT_RADIX_BITS_PER_PASS*pass < max_nonzero_bit; pass++) {
 
         auto& pipeline_sorting = buffers.is_unsorted_1 ? pipeline_sorting_1 : pipeline_sorting_2;
 
@@ -670,7 +754,7 @@ int32_t VulkanGSRenderer::executeSum(
     }, COMPUTE_SHADER_READ_WRITE);
 
     executeCompute(
-        {{num_elements, 1024}},
+        {{num_elements, VKSPLAT_SUM_BLOCK_SIZE}},
         &num_elements, sizeof(uint32_t),
         pipeline_sum,
         {
@@ -709,7 +793,7 @@ void VulkanGSRenderer::executeWhere(
     int32_t num_nonzero = readElement<int32_t>(buffers._temp_cumsum.deviceBuffer, num_elements-1);
 
     executeCompute(
-        {{num_elements, 256}},
+        {{num_elements, VKSPLAT_WHERE_BLOCK_SIZE}},
         (uint32_t*)&num_elements, sizeof(uint32_t),
         pipeline_where,
         {

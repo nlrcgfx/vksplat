@@ -223,7 +223,7 @@ void VulkanGSPipeline::selectPhysicalDevice(int device_id) {
 
     printf(
         "Device Requirement: subgroup>=%d, maxGroups>=[%u %u %u], maxThreads>=[%u %u %u], maxShared>=%u, I16|I64|F32Atomic \n",
-        (int)SUBGROUP_SIZE,
+        (int)VKSPLAT_SUBGROUP_SIZE,
         minMaxGroups[0], minMaxGroups[1], minMaxGroups[2],
         minMaxThreads[0], minMaxThreads[1], minMaxThreads[2],
         minSharedMemory
@@ -264,7 +264,7 @@ void VulkanGSPipeline::selectPhysicalDevice(int device_id) {
         deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         deviceProperties2.pNext = &subgroupProperties;
         vkGetPhysicalDeviceProperties2(device, &deviceProperties2);
-        bool validSubgroupSize = subgroupProperties.subgroupSize >= SUBGROUP_SIZE;
+        bool validSubgroupSize = subgroupProperties.subgroupSize >= VKSPLAT_SUBGROUP_SIZE;
 
         // check compute pipeline.support
         uint32_t queue_family_count = 0;
@@ -307,8 +307,11 @@ void VulkanGSPipeline::selectPhysicalDevice(int device_id) {
         else if (deviceProperties.vendorID == 0x5143)
             vendor = DeviceVendor::Qualcomm;
 
+        bool hasRequiredInt64 = hasInt64 || !vksplat_config::kShaderRequiresInt64;
+        bool hasRequiredFloat32AtomicAdd = hasFloat32AtomicAdd || VKSPLAT_USE_EMULATED_F32_ATOMIC;
         bool softViable = validSubgroupSize && validGroupSize[3] && validQueueFamily && hasInt16;
-        bool viable = softViable && validGroupCount[3] && validSharedSize && hasInt64 && hasFloat32AtomicAdd;
+        bool viable = softViable && validGroupCount[3] && validSharedSize &&
+            hasRequiredInt64 && hasRequiredFloat32AtomicAdd;
         SelectedDevice deviceInfo{
             (int)i, device, queueFamilyIdx,
             {
@@ -350,9 +353,9 @@ void VulkanGSPipeline::selectPhysicalDevice(int device_id) {
             hasFloat32AtomicAdd ? kANSIDefault : kANSIOrange
         );
         if (softViable) {
-            if (!hasInt64)
+            if (!hasInt64 && !VKSPLAT_USE_EMULATED_INT64)
                 printf("  \033[%dm%s\033[m\n", kANSIOrange, "WARNING: To use this device, shaders must be compiled with USE_EMULATED_INT64=1.");
-            if (!hasFloat32AtomicAdd)
+            if (!hasFloat32AtomicAdd && !VKSPLAT_USE_EMULATED_F32_ATOMIC)
                 printf("  \033[%dm%s\033[m\n", kANSIOrange, "WARNING: To use this device, shaders must be compiled with USE_EMULATED_F32_ATOMIC=1.");
             if (!validGroupCount[3])
                 printf("  \033[%dm%s\033[m\n", kANSIOrange, "WARNING: This device may not work if you want to train a large scene.");
@@ -384,10 +387,10 @@ void VulkanGSPipeline::selectPhysicalDevice(int device_id) {
         device.idx,
         viableDevices.empty() ? " (\033[93mPOSSIBLY VIABLE\033[m)" : ""
     );
-    if (!deviceInfo.hasFloat32AtomicAdd)
-        printf("\033[%dm%s\033[m\n", kANSIOrange, "WARNING: Float32AtomicAdd is not available. Make sure shaders are compiled with USE_EMULATED_F32_ATOMIC=1.");
-    if (!deviceInfo.hasInt64)
-        printf("\033[%dm%s\033[m\n", kANSIOrange, "WARNING: Int64 is not available. Make sure shaders are compiled with USE_EMULATED_INT64=1.");
+    if (!deviceInfo.hasFloat32AtomicAdd && !VKSPLAT_USE_EMULATED_F32_ATOMIC)
+        throw std::runtime_error("Selected Vulkan device does not support shaderBufferFloat32AtomicAdd. Rebuild C++ with VKSPLAT_USE_EMULATED_F32_ATOMIC=1 and recompile shaders with USE_EMULATED_F32_ATOMIC=1.");
+    if (!deviceInfo.hasInt64 && vksplat_config::kShaderRequiresInt64)
+        throw std::runtime_error("Selected Vulkan device does not support shaderInt64. Rebuild C++ with VKSPLAT_USE_EMULATED_INT64=1 and recompile shaders with USE_EMULATED_INT64=1.");
     printf("\n");
     fflush(stdout);
 }
@@ -419,7 +422,7 @@ void VulkanGSPipeline::createDevice() {
     
     VkPhysicalDeviceFeatures enabledFeatures = {};
     enabledFeatures.shaderInt16 = VK_TRUE;
-    if (deviceInfo.hasInt64)
+    if (vksplat_config::kShaderRequiresInt64)
         enabledFeatures.shaderInt64 = VK_TRUE;
 
     VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomic_float_features = {};
@@ -432,7 +435,7 @@ void VulkanGSPipeline::createDevice() {
     subgroupSizeControlFeatures.subgroupSizeControl = VK_TRUE;
     subgroupSizeControlFeatures.computeFullSubgroups = VK_TRUE;
     subgroupSizeControlFeatures.pNext = VK_NULL_HANDLE;
-    if (deviceInfo.hasFloat32AtomicAdd)
+    if (!VKSPLAT_USE_EMULATED_F32_ATOMIC)
         subgroupSizeControlFeatures.pNext = &atomic_float_features;
 
     VkDeviceCreateInfo create_info = {};
@@ -443,8 +446,9 @@ void VulkanGSPipeline::createDevice() {
 
     std::vector<const char*> device_extensions = {
         VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME,
-        VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
     };
+    if (!VKSPLAT_USE_EMULATED_F32_ATOMIC)
+        device_extensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
     create_info.enabledExtensionCount = (uint32_t)device_extensions.size();
     create_info.ppEnabledExtensionNames = device_extensions.data();
     create_info.pNext = &subgroupSizeControlFeatures;
@@ -858,7 +862,7 @@ void VulkanGSPipeline::createComputePipeline(_ComputePipeline &pipeline, const s
 
     VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT req = {};
     req.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT;
-    req.requiredSubgroupSize = SUBGROUP_SIZE;  // 32
+    req.requiredSubgroupSize = VKSPLAT_SUBGROUP_SIZE;
 
     VkPipelineShaderStageCreateInfo compute_shader_stage_info = {};
     compute_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -866,7 +870,7 @@ void VulkanGSPipeline::createComputePipeline(_ComputePipeline &pipeline, const s
     compute_shader_stage_info.module = pipeline.shader;
     compute_shader_stage_info.pName = "main";
     if (compatible_subgroup_size && (
-        deviceInfo.subgroupSize != SUBGROUP_SIZE ||
+        deviceInfo.subgroupSize != VKSPLAT_SUBGROUP_SIZE ||
         deviceInfo.vendor == DeviceVendor::Intel_R_
     ))
         compute_shader_stage_info.pNext = &req;

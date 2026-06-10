@@ -1,4 +1,6 @@
-#define BLOCK_SIZE 256
+#include "config.slang"
+
+#define BLOCK_SIZE VKSPLAT_WHERE_BLOCK_SIZE
 
 layout(binding=0) StructuredBuffer<int32_t> mask;  // (N,)
 layout(binding=1) StructuredBuffer<int32_t> mask_cumsum;  // (N,)

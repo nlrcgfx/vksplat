@@ -48,9 +48,11 @@ private:
         Tensor_0_8_0 = 2,
         Tensor_0_8_8 = 3,
         Tensor_1_16_0 = 4,
-        size = 5,
+        size = 2 + VKSPLAT_TENSOR_BWD_CONFIG_COUNT,
         Default = 0x3fffffff,
     };
+    static_assert(VKSPLAT_TENSOR_BWD_CONFIG_COUNT == 3,
+        "Update RasterBackwardImpl names and scheduler timers when tensor variants change");
     std::vector<RasterBackwardImpl> rasterizeBackwardAlternatives;
     ThompsonSamplingScheduler rasterizeBackwardScheduler;
     void initRasterizationBackwardScheduler();

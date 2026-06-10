@@ -8,7 +8,7 @@
 
 #define PIXEL_BATCH_SIZE TILE_SIZE
 
-static const uint MAX_SPLAT_BATCH_SIZE = 128;
+static const uint MAX_SPLAT_BATCH_SIZE = VKSPLAT_RASTERIZE_BWD_PER_SPLAT_THREADS;
 
 
 groupshared float4 pixel_state[PIXEL_BATCH_SIZE];

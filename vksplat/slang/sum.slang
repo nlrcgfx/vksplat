@@ -1,6 +1,6 @@
-#ifndef BLOCK_SIZE
-static const uint BLOCK_SIZE = 1024;
-#endif
+#include "config.slang"
+
+static const uint BLOCK_SIZE = VKSPLAT_SUM_BLOCK_SIZE;
 
 layout(binding=0) StructuredBuffer<int32_t> g_input;  // (N,)
 layout(binding=1) RWStructuredBuffer<int32_t> g_output;  // (1,)

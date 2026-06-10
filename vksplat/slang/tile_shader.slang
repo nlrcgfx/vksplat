@@ -41,7 +41,7 @@ layout(binding=4) StructuredBuffer<int32_t> index_buffer_offset;
 layout(binding=5) RWStructuredBuffer<sortingKey_t> out_unsorted_keys;
 layout(binding=6) RWStructuredBuffer<int32_t> out_unsorted_gauss_idx;
 
-#define BLOCK_SIZE 64
+#define BLOCK_SIZE VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE
 #define NUM_SUBGROUPS (BLOCK_SIZE / SUBGROUP_SIZE)
 
 [shader("compute")]
@@ -168,7 +168,7 @@ layout(binding=0) StructuredBuffer<sortingKey_t> sorted_keys;
 layout(binding=1) RWStructuredBuffer<int32_t> out_tile_ranges;
 
 [shader("compute")]
-[numthreads(256, 1, 1)]
+[numthreads(VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS, 1, 1)]
 void main(
     uint3 dispatchThreadID : SV_DispatchThreadID,
     uniform Uniforms uniforms

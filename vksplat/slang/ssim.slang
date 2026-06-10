@@ -22,9 +22,9 @@ static const float GAUSS_COEFFS[6] = {
     0.26601171493530273f
 };
 
-static const uint BLOCK_X = 16;
-static const uint BLOCK_Y = 16;
-static const uint HALO = 5;
+static const uint BLOCK_X = VKSPLAT_SSIM_BLOCK_X;
+static const uint BLOCK_Y = VKSPLAT_SSIM_BLOCK_Y;
+static const uint HALO = VKSPLAT_SSIM_HALO;
 static const uint SHARED_X = BLOCK_X + 2 * HALO;
 static const uint SHARED_Y = BLOCK_Y + 2 * HALO;
 static const uint CONV_X = BLOCK_X;

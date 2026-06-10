@@ -564,8 +564,8 @@ void VulkanGSTrainer::camera_to_uniforms(const Camera &cam, VulkanGSRendererUnif
     uniforms.image_height = cam.h;
     uniforms.image_width = cam.w;
 
-    uniforms.grid_height = _CEIL_DIV(cam.h, TILE_HEIGHT);
-    uniforms.grid_width = _CEIL_DIV(cam.w, TILE_WIDTH);
+    uniforms.grid_height = _CEIL_DIV(cam.h, VKSPLAT_TILE_HEIGHT);
+    uniforms.grid_width = _CEIL_DIV(cam.w, VKSPLAT_TILE_WIDTH);
 
     uniforms.camera_model =
         (cam.model == cam.SIMPLE_PINHOLE
@@ -726,7 +726,7 @@ void VulkanGSTrainer::executeFusedProjectionBackwardOptimizerStep(
     if (config.strategy == TrainerConfig::Strategy::MCMC)
         alloc_size = std::max(alloc_size, (size_t)config.cap_max);
     executeCompute(
-        {{num_splats, SUBGROUP_SIZE}},
+        {{num_splats, VKSPLAT_SUBGROUP_SIZE}},
         &shaderUniforms, sizeof(shaderUniforms),
         pipeline_fused_projection_backward_optimizer,
         {
@@ -739,8 +739,8 @@ void VulkanGSTrainer::executeFusedProjectionBackwardOptimizerStep(
             buffers.v_inv_cov_vs_opacity.deviceBuffer,
             buffers.v_rgb.deviceBuffer,
             resizeAndCopyDeviceBuffer(buffers.g_xyz_ws, 2*3*alloc_size, true),
-            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_1, 16*3*_CEIL_ROUND(alloc_size,SH_REORDER_SIZE), true),
-            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_2, 16*3*_CEIL_ROUND(alloc_size,SH_REORDER_SIZE), true),
+            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_1, 16*3*_CEIL_ROUND(alloc_size,VKSPLAT_SH_REORDER_SIZE), true),
+            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_2, 16*3*_CEIL_ROUND(alloc_size,VKSPLAT_SH_REORDER_SIZE), true),
             resizeAndCopyDeviceBuffer(buffers.g_rotations, 2*4*alloc_size, true),
             resizeAndCopyDeviceBuffer(buffers.g_scales_opacs, 2*4*alloc_size, true),
         }
@@ -811,7 +811,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
     }, COMPUTE_SHADER_READ_WRITE);
 
     executeCompute(
-        {{num_splats, 256}},
+        {{num_splats, VKSPLAT_DEFAULT_GROUP_SIZE}},
         &uniforms, sizeof(uniforms),
         pipeline_default.update_state,
         {
@@ -833,7 +833,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
         // grow GS
 
         executeCompute(
-            {{num_splats, 256}},
+            {{num_splats, VKSPLAT_DEFAULT_GROUP_SIZE}},
             &uniforms, sizeof(uniforms),
             pipeline_default.compute_grow_mask,
             {
@@ -856,12 +856,12 @@ void VulkanGSTrainer::executeDefaultPostBackward(
             size_t new_num_splats = num_splats + num_dupli + num_split;
             barrierAllGaussParams(buffers);
             resizeAndCopyDeviceBuffer(buffers.xyz_ws, 3*new_num_splats, false);
-            resizeAndCopyDeviceBuffer(buffers.sh_coeffs, 16*3*_CEIL_ROUND(new_num_splats,SH_REORDER_SIZE), false);
+            resizeAndCopyDeviceBuffer(buffers.sh_coeffs, 16*3*_CEIL_ROUND(new_num_splats,VKSPLAT_SH_REORDER_SIZE), false);
             resizeAndCopyDeviceBuffer(buffers.rotations, 4*new_num_splats, false);
             resizeAndCopyDeviceBuffer(buffers.scales_opacs, 4*new_num_splats, false);
             resizeAndCopyDeviceBuffer(buffers.g_xyz_ws, 3*2*new_num_splats, false);
-            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_1, 16*3*_CEIL_ROUND(new_num_splats,SH_REORDER_SIZE), false);
-            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_2, 16*3*_CEIL_ROUND(new_num_splats,SH_REORDER_SIZE), false);
+            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_1, 16*3*_CEIL_ROUND(new_num_splats,VKSPLAT_SH_REORDER_SIZE), false);
+            resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_2, 16*3*_CEIL_ROUND(new_num_splats,VKSPLAT_SH_REORDER_SIZE), false);
             resizeAndCopyDeviceBuffer(buffers.g_rotations, 4*2*new_num_splats, false);
             resizeAndCopyDeviceBuffer(buffers.g_scales_opacs, 4*2*new_num_splats, false);
             resizeAndCopyDeviceBuffer(buffers.default_grad, 2*new_num_splats, false);
@@ -879,7 +879,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
             uniforms.num_splats = (uint32_t)(num_splats + num_dupli);
             uniforms.old_num_splats = (uint32_t)(num_splats);
             executeCompute(
-                {{num_dupli, 256}},
+                {{num_dupli, VKSPLAT_DEFAULT_GROUP_SIZE}},
                 &uniforms, sizeof(uniforms),
                 pipeline_default.duplicate,
                 {
@@ -909,7 +909,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
             uniforms.num_splats = (uint32_t)(num_splats + num_dupli + num_split);
             uniforms.old_num_splats = (uint32_t)(num_splats + num_dupli);
             executeCompute(
-                {{num_split, 256}},
+                {{num_split, VKSPLAT_DEFAULT_GROUP_SIZE}},
                 &uniforms, sizeof(uniforms),
                 pipeline_default.split,
                 {
@@ -936,7 +936,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
         uniforms.num_splats = (uint32_t)num_splats;
         uniforms.old_num_splats = (uint32_t)num_splats;
         executeCompute(
-            {{num_splats, 256}},
+            {{num_splats, VKSPLAT_DEFAULT_GROUP_SIZE}},
             &uniforms, sizeof(uniforms),
             pipeline_default.compute_prune_mask,
             {
@@ -965,13 +965,13 @@ void VulkanGSTrainer::executeDefaultPostBackward(
                 size_t num_keep_ceil = num_keep,
                     num_splats_ceil = num_splats;
                 if (type == Sh || type == Mean) {
-                    size_t REORDER_SIZE = type == Sh ? SH_REORDER_SIZE : 1;
+                    size_t REORDER_SIZE = type == Sh ? VKSPLAT_SH_REORDER_SIZE : 1;
                     num_keep_ceil = _CEIL_ROUND(num_keep, REORDER_SIZE);
                     num_splats_ceil = _CEIL_ROUND(num_splats, REORDER_SIZE);
                 }
                 resizeDeviceBuffer(buffers._temp_gauss_attr, num_keep_ceil*stride);
                 executeCompute(
-                    {{num_splats_ceil*(type == Default ? stride : 1), 256}},
+                    {{num_splats_ceil*(type == Default ? stride : 1), VKSPLAT_DEFAULT_GROUP_SIZE}},
                     &uniforms, sizeof(uniforms),
                     type == Mean ? pipeline_default.prune_mean :
                         type == Sh ? pipeline_default.prune_sh :
@@ -1031,7 +1031,7 @@ void VulkanGSTrainer::executeDefaultPostBackward(
         uniforms.num_splats = (uint32_t)num_splats;
         uniforms.old_num_splats = (uint32_t)num_splats;
         executeCompute(
-            {{num_splats, 256}},
+            {{num_splats, VKSPLAT_DEFAULT_GROUP_SIZE}},
             &uniforms, sizeof(uniforms),
             pipeline_default.reset_opa,
             {
@@ -1064,8 +1064,8 @@ void VulkanGSTrainer::executeMCMCPostBackward(
     PerfTimer::Timer<PerfTimer::MCMCPostBackward> timer(this);
     DEVICE_GUARD;
 
-    const size_t kGroupSize = 256;
-    const size_t kGroupSizeSparse = 64;
+    const size_t kGroupSize = VKSPLAT_MCMC_GROUP_SIZE;
+    const size_t kGroupSizeSparse = VKSPLAT_MCMC_GROUP_SIZE_SPARSE;
     size_t num_splats = buffers.num_splats;
 
     Uniform32_t uniforms[5];
@@ -1242,12 +1242,12 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                 {
                     buffers.mcmc_index_map.deviceBuffer,
                     resizeAndCopyDeviceBuffer(buffers.xyz_ws, 3*alloc_size, false),
-                    resizeAndCopyDeviceBuffer(buffers.sh_coeffs, 16*3*_CEIL_ROUND(alloc_size,SH_REORDER_SIZE), false),
+                    resizeAndCopyDeviceBuffer(buffers.sh_coeffs, 16*3*_CEIL_ROUND(alloc_size,VKSPLAT_SH_REORDER_SIZE), false),
                     resizeAndCopyDeviceBuffer(buffers.rotations, 4*alloc_size, false),
                     resizeAndCopyDeviceBuffer(buffers.scales_opacs, 4*alloc_size, false),
                     resizeAndCopyDeviceBuffer(buffers.g_xyz_ws, 3*2*alloc_size, false),
-                    resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_1, 16*3*_CEIL_ROUND(alloc_size,SH_REORDER_SIZE), false),
-                    resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_2, 16*3*_CEIL_ROUND(alloc_size,SH_REORDER_SIZE), false),
+                    resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_1, 16*3*_CEIL_ROUND(alloc_size,VKSPLAT_SH_REORDER_SIZE), false),
+                    resizeAndCopyDeviceBuffer(buffers.g_sh_coeffs_2, 16*3*_CEIL_ROUND(alloc_size,VKSPLAT_SH_REORDER_SIZE), false),
                     resizeAndCopyDeviceBuffer(buffers.g_rotations, 4*2*alloc_size, false),
                     resizeAndCopyDeviceBuffer(buffers.g_scales_opacs, 4*2*alloc_size, false),
                 }
@@ -1303,7 +1303,7 @@ void VulkanGSTrainer::executeMortonSorting(
 
     barrierAllGaussParams(buffers);
     executeCompute(
-        {{num_splats, SUBGROUP_SIZE*SUBGROUP_SIZE}},
+        {{num_splats, VKSPLAT_MORTON_STATS_THREADS}},
         &num_splats, sizeof(uint32_t),
         pipeline_morton_sort.compute_stats,
         {
@@ -1316,7 +1316,7 @@ void VulkanGSTrainer::executeMortonSorting(
         { buffers._temp_sum.deviceBuffer, COMPUTE_SHADER_WRITE },
     }, COMPUTE_SHADER_READ);
     executeCompute(
-        {{num_splats, 256}},
+        {{num_splats, VKSPLAT_MORTON_GENERATE_KEYS_THREADS}},
         &num_splats, sizeof(uint32_t),
         pipeline_morton_sort.generate_keys,
         {
@@ -1328,7 +1328,7 @@ void VulkanGSTrainer::executeMortonSorting(
     );
 
     // TODO: fix double timer count
-    executeSort(uniforms, buffers, 32);
+    executeSort(uniforms, buffers, VKSPLAT_MORTON_SORT_KEY_BITS);
 
     bufferMemoryBarrier({
         { buffers.sorted_gauss_idx().deviceBuffer, COMPUTE_SHADER_WRITE },
@@ -1337,16 +1337,16 @@ void VulkanGSTrainer::executeMortonSorting(
     auto applyIndex = [&](Buffer<float> &buffer, uint32_t stride, bool is_sh=false) {
         if (buffer.deviceSize() == 0)
             return;
-        if (SH_REORDER_SIZE == 1)
+        if (VKSPLAT_SH_REORDER_SIZE == 1)
             is_sh = false;
-        uint32_t num_splats_ceil = _CEIL_ROUND(num_splats, is_sh ? SH_REORDER_SIZE : 1);
+        uint32_t num_splats_ceil = _CEIL_ROUND(num_splats, is_sh ? VKSPLAT_SH_REORDER_SIZE : 1);
         for (int offset = 0; offset < (is_sh ? 12 : 1); ++offset) {
             uint32_t uniform[2] = {
                 num_splats_ceil,
                 is_sh ? offset : stride
             };
             executeCompute(
-                {{num_splats_ceil*(is_sh ? 1 : stride), 1024}},
+                {{num_splats_ceil*(is_sh ? 1 : stride), VKSPLAT_MORTON_APPLY_THREADS}},
                 &uniform, 2*sizeof(uniform),
                 is_sh ? pipeline_morton_sort.apply_indices_sh :
                     pipeline_morton_sort.apply_indices,
@@ -1361,7 +1361,7 @@ void VulkanGSTrainer::executeMortonSorting(
                 { buffers._temp_gauss_attr.deviceBuffer, COMPUTE_SHADER_WRITE },
             }, COMPUTE_SHADER_READ_WRITE);
             executeCompute(
-                {{num_splats_ceil*(is_sh ? 1 : stride), 1024}},
+                {{num_splats_ceil*(is_sh ? 1 : stride), VKSPLAT_MORTON_APPLY_THREADS}},
                 &uniform, 2*sizeof(uniform),
                 is_sh ? pipeline_morton_sort.update_buffer_sh :
                     pipeline_morton_sort.update_buffer,

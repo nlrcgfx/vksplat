@@ -1,5 +1,7 @@
-#define GROUP_SIZE 256
-#define GROUP_SIZE_SPARSE 64
+#include "config.slang"
+
+#define GROUP_SIZE VKSPLAT_MCMC_GROUP_SIZE
+#define GROUP_SIZE_SPARSE VKSPLAT_MCMC_GROUP_SIZE_SPARSE
 
 #define MCMC_PHASE_InjectNoise 0
 #define MCMC_PHASE_Probabilities 1
