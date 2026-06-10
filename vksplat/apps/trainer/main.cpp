@@ -204,9 +204,9 @@ void save_pixel_state_png(VkSplatTrainingSession& session, const fs::path& path)
     for (size_t i = 0; i < static_cast<size_t>(width) * height; i++) {
         const float* src = pixels.data() + 4 * i;
         uint8_t* dst = rgb.data() + 3 * i;
-        dst[0] = to_byte(src[2]);
+        dst[0] = to_byte(src[0]);
         dst[1] = to_byte(src[1]);
-        dst[2] = to_byte(src[0]);
+        dst[2] = to_byte(src[2]);
     }
 
     if (!stbi_write_png(path_string(path).c_str(), width, height, 3, rgb.data(), width * 3)) {
