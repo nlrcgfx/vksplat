@@ -1,0 +1,126 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "vksplat-base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "build-debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "build-release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "host-ninja",
+      "hidden": true,
+      "generator": "Ninja"
+    },
+    {
+      "name": "ohos-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "toolchainFile": "$env{OHOS_SDK_NATIVE}/build/cmake/ohos.toolchain.cmake",
+      "cmakeExecutable": "$env{OHOS_SDK_NATIVE}/build-tools/cmake/bin/cmake",
+      "cacheVariables": {
+        "OHOS_ARCH": "arm64-v8a",
+        "OHOS_STL": "c++_shared",
+        "VKSPLAT_BUILD_PYTHON": "OFF"
+      },
+      "condition": {
+        "type": "notEquals",
+        "lhs": "$env{OHOS_SDK_NATIVE}",
+        "rhs": ""
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Host Ninja debug build",
+      "inherits": [
+        "vksplat-base",
+        "host-ninja",
+        "build-debug"
+      ]
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Host Ninja release build",
+      "inherits": [
+        "vksplat-base",
+        "host-ninja",
+        "build-release"
+      ]
+    },
+    {
+      "name": "ohos-debug",
+      "displayName": "OHOS Debug (arm64)",
+      "description": "Cross-compile for OpenHarmony arm64-v8a with c++_shared",
+      "inherits": [
+        "ohos-base",
+        "build-debug"
+      ]
+    },
+    {
+      "name": "ohos-release",
+      "displayName": "OHOS Release (arm64)",
+      "description": "Cross-compile for OpenHarmony arm64-v8a with c++_shared",
+      "inherits": [
+        "ohos-base",
+        "build-release"
+      ]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "ohos-debug",
+      "configurePreset": "ohos-debug"
+    },
+    {
+      "name": "ohos-release",
+      "configurePreset": "ohos-release"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "displayName": "Configure and build release",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "release"
+        },
+        {
+          "type": "build",
+          "name": "release"
+        }
+      ]
+    }
+  ]
+}

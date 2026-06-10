@@ -76,6 +76,28 @@ cmake -B build
 cmake --build build --config Release  # or Debug
 ```
 
+#### CMake Presets (recommended)
+
+From `vksplat/`, use Ninja single-config presets:
+
+```bash
+cd /path/to/vksplat
+cmake --preset release
+cmake --build --preset release
+```
+
+Debug build: replace `release` with `debug`. On Windows, run from a Visual Studio Developer shell so Ninja can find MSVC.
+
+OpenHarmony cross-compile (requires `OHOS_SDK_NATIVE` pointing at the SDK `native` directory):
+
+```bash
+export OHOS_SDK_NATIVE=/path/to/native
+cmake --preset ohos-release
+cmake --build --preset ohos-release
+```
+
+Copy `CMakeUserPresets.json.example` to `CMakeUserPresets.json` to pin a local SDK path without exporting it in the shell.
+
 Import from Python (from `vksplat` folder):
 ```py
 from build import vksplat  # or build.Debug, build.Release for MSVC
