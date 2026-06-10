@@ -100,3 +100,6 @@ if(VKSPLAT_BUILD_PYTHON)
 
     install(TARGETS vksplat DESTINATION .)
 endif()
+
+include(cmake/VkSplatCompileCommands.cmake)
+vksplat_add_compile_commands_sync_target()
