@@ -33,3 +33,5 @@ vksplat/contrib/glm/
 .idea/
 *.user
 CMakeUserPresets.json
+
+outputs/

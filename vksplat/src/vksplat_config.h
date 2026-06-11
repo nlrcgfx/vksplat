@@ -3,19 +3,21 @@
 #include <array>
 #include <cstdint>
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 // Canonical VkSplat configuration.
 //
 // Keep VKSPLAT_* values in the simple #define form below. The shader config
 // generator parses these definitions and emits Slang/GLSL fragments from them.
 
 #ifndef VKSPLAT_SUBGROUP_SIZE
-#define VKSPLAT_SUBGROUP_SIZE 32
+#define VKSPLAT_SUBGROUP_SIZE 32  // default to 32 for compatibility with existing shaders
 #endif
 
 #define VKSPLAT_TILE_HEIGHT 16
 #define VKSPLAT_TILE_WIDTH 16
 #define VKSPLAT_TILE_SIZE (VKSPLAT_TILE_HEIGHT * VKSPLAT_TILE_WIDTH)
-#define VKSPLAT_SH_REORDER_SIZE VKSPLAT_SUBGROUP_SIZE
+#define VKSPLAT_SH_REORDER_SIZE VKSPLAT_SUBGROUP_SIZE // default to subgroup size for compatibility with existing shaders
 
 #ifndef VKSPLAT_USE_EMULATED_INT64
 #define VKSPLAT_USE_EMULATED_INT64 0
@@ -53,15 +55,15 @@ typedef int64_t rectTileSpace_t;
 
 #define VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE 64
 #define VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS 256
-#define VKSPLAT_CUMSUM_BLOCK_SIZE 1024
-#define VKSPLAT_SUM_BLOCK_SIZE 1024
+#define VKSPLAT_CUMSUM_BLOCK_SIZE 512
+#define VKSPLAT_SUM_BLOCK_SIZE 512
 #define VKSPLAT_WHERE_BLOCK_SIZE 256
 #define VKSPLAT_DEFAULT_GROUP_SIZE 256
 #define VKSPLAT_MCMC_GROUP_SIZE 256
 #define VKSPLAT_MCMC_GROUP_SIZE_SPARSE 64
 #define VKSPLAT_MORTON_STATS_THREADS (VKSPLAT_SUBGROUP_SIZE * VKSPLAT_SUBGROUP_SIZE)
 #define VKSPLAT_MORTON_GENERATE_KEYS_THREADS 256
-#define VKSPLAT_MORTON_APPLY_THREADS 1024
+#define VKSPLAT_MORTON_APPLY_THREADS 512
 #define VKSPLAT_MORTON_SORT_KEY_BITS 32
 #define VKSPLAT_RASTERIZE_BWD_PER_SPLAT_THREADS 128
 #define VKSPLAT_SSIM_BLOCK_X 16

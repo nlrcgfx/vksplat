@@ -113,10 +113,10 @@ void main() {
     uint keyIndex = partitionStart + (PARTITION_DIVISION * gl_SubgroupSize) * subgroupIndex + i * gl_SubgroupSize + threadIndex;
     keyType key = keyIndex < elementCount ? keysIn.data[keyIndex] : keyType(-1);
     localKeys[i] = key;
-    
+
     localValues[i] = keyIndex < elementCount ? valuesIn.data[keyIndex] : 0;
 
-    uint radix = uint(key >> keyType(pass * 8)) & 255;
+    uint radix = uint(key >> keyType(pass * PARTITION_DIVISION)) & 255;
     localRadix[i] = radix;
 
     // mask per digit
@@ -145,7 +145,7 @@ void main() {
     localOffsets[i] = subgroupOffset;
   }
   barrier();
-  
+
   // local histogram reduce 4096
   for (uint i = index; i < RADIX * gl_NumSubgroups; i += WORKGROUP_SIZE) {
     uint v = localHistogram[i];
@@ -224,7 +224,7 @@ void main() {
   for (uint i = index; i < PARTITION_SIZE; i += WORKGROUP_SIZE) {
     // keyType key = localHistogram[i];
     keyType key = loadLocalHistogramAlias(i);
-    uint radix = uint(key >> keyType(pass * 8)) & 255;
+    uint radix = uint(key >> keyType(pass * PARTITION_DIVISION)) & 255;
     uint32_t dstOffset = localHistogramSum[radix] + i;
     if (dstOffset < elementCount) {
       keysOut.data[dstOffset] = key;
