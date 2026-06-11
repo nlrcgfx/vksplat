@@ -80,7 +80,9 @@ std::string format_bytes(size_t bytes) {
 
 json device_info_to_json(const VkSplatTrainingSession::DeviceInfo& info) {
     json result = json::object();
-    for (const auto& [key, value] : info) {
+    for (const auto& pair : info) {
+        const auto& key = pair.first;
+        const auto& value = pair.second;
         std::visit([&](const auto& item) {
             result[key] = item;
         }, value);
