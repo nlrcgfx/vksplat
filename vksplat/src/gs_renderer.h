@@ -40,6 +40,7 @@ public:
 
     void executeCalculateIndexBufferOffset(VulkanGSPipelineBuffers& buffers);
     void executeSort(const VulkanGSRendererUniforms& uniforms, VulkanGSPipelineBuffers& buffers, int num_bits);
+    std::string get_last_raster_backward_variant() const { return last_raster_backward_variant; }
 
 private:
     enum class RasterBackwardImpl {
@@ -55,6 +56,7 @@ private:
         "Update RasterBackwardImpl names and scheduler timers when tensor variants change");
     std::vector<RasterBackwardImpl> rasterizeBackwardAlternatives;
     ThompsonSamplingScheduler rasterizeBackwardScheduler;
+    std::string last_raster_backward_variant = "not_run";
     void initRasterizationBackwardScheduler();
 
 protected:

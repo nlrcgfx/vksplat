@@ -34,6 +34,16 @@ public:
         DeviceInfo device;
     };
 
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    struct BufferDumpConfig {
+        bool enabled = false;
+        bool dump_all_buffers = false;
+        bool dump_capacity = false;
+        std::string root_dir;
+        std::string run_id;
+    };
+#endif
+
     VulkanGSTrainer trainer;
     VulkanGSRendererUniforms uniforms;
     VulkanGSPipelineBuffers buffers;
@@ -43,6 +53,10 @@ public:
 
     void initialize(std::string spirv_dir, int device_id);
     TrainMetadata set_train_config(const TrainerConfig& train_config);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    void configure_buffer_dumps(const BufferDumpConfig& dump_config);
+    void finalize_buffer_dumps();
+#endif
 
     size_t num_train() const;
     size_t num_val() const;
@@ -104,4 +118,17 @@ public:
 
     void write_ply(std::string filename);
     void cleanup();
+
+private:
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    BufferDumpConfig dump_config;
+    DeviceInfo dump_device_info;
+    std::string dump_shader_config_json;
+    std::string dump_last_raster_backward_variant;
+    int dump_current_step = -1;
+    size_t dump_current_train_idx = static_cast<size_t>(-1);
+
+    void dump_checkpoint(const std::string& directory, const std::string& stage, const std::string& substage, int step, size_t train_idx);
+    void dump_after_dataset_load();
+#endif
 };

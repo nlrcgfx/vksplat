@@ -159,5 +159,16 @@ struct VulkanGSPipelineBuffers {
     static void assignScalesOpacs(Buffer<float> &scales_opacs, size_t n, const float* scales, const float* opacs);
 };
 
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+struct VulkanBufferDumpFileInfo {
+    std::string filename;
+    std::string metadata_json;
+    size_t logical_bytes = 0;
+    size_t alloc_bytes = 0;
+    size_t payload_bytes = 0;
+    uint64_t flags = 0;
+};
+#endif
+
 float halfToFloat(uint16_t h);
 uint16_t floatToHalf(float f);

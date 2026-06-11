@@ -1,5 +1,8 @@
 #include "gs_renderer.h"
 
+#include <filesystem>
+#include <fstream>
+
 
 size_t VulkanGSPipelineBuffers::getTotalAllocSize() {
     size_t total = 0;
@@ -367,6 +370,114 @@ void VulkanGSPipeline::copyFromDevice(Buffer<T>& buffer) {
         vkUnmapMemory(device, stager.memory);
     }
 }
+
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+PACK_STRUCT(struct VulkanBufferDumpHeader {
+    char magic[8];
+    uint32_t version;
+    uint32_t header_size;
+    uint64_t metadata_json_bytes;
+    uint64_t payload_offset;
+    uint64_t payload_bytes;
+    uint64_t logical_bytes;
+    uint64_t alloc_bytes;
+    uint64_t flags;
+});
+
+void VulkanGSPipeline::copyRawBytesFromDevice(
+    const _VulkanBuffer& deviceBuffer,
+    size_t byte_count,
+    std::vector<uint8_t>& out
+) {
+    out.clear();
+    if (byte_count == 0)
+        return;
+    if (deviceBuffer.buffer == VK_NULL_HANDLE)
+        throw std::runtime_error("Attempt to dump an empty Vulkan buffer");
+    if (byte_count > deviceBuffer.allocSize)
+        throw std::runtime_error("Attempt to dump more bytes than the Vulkan buffer allocation");
+
+    if (commandBatchInProgress) {
+        VkBufferMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.pNext = nullptr;
+        barrier.srcAccessMask =
+            VK_ACCESS_SHADER_WRITE_BIT |
+            VK_ACCESS_SHADER_READ_BIT |
+            VK_ACCESS_TRANSFER_WRITE_BIT |
+            VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.srcQueueFamilyIndex = queue_family_index;
+        barrier.dstQueueFamilyIndex = queue_family_index;
+        barrier.buffer = deviceBuffer.buffer;
+        barrier.offset = 0;
+        barrier.size = byte_count;
+
+        vkCmdPipelineBarrier(
+            command_buffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            1, &barrier,
+            0, nullptr
+        );
+    }
+
+    allocStagingBuffer(byte_count);
+    out.resize(byte_count);
+    {
+        std::lock_guard<std::mutex> lock(stager.mutex);
+
+        {
+            DEVICE_GUARD;
+            VkBufferCopy copy_region = {};
+            copy_region.size = byte_count;
+            vkCmdCopyBuffer(command_buffer, deviceBuffer.buffer, stager.buffer, 1, &copy_region);
+        }
+        HOST_GUARD;
+
+        void* temp = nullptr;
+        if (vkMapMemory(device, stager.memory, 0, byte_count, 0, &temp) != VK_SUCCESS)
+            throw std::runtime_error("Failed to map staging memory for Vulkan buffer dump");
+        memcpy(out.data(), temp, byte_count);
+        vkUnmapMemory(device, stager.memory);
+    }
+}
+
+void VulkanGSPipeline::writeStructuredBufferDump(
+    const VulkanBufferDumpFileInfo& info,
+    const std::vector<uint8_t>& payload
+) {
+    if (payload.size() != info.payload_bytes)
+        throw std::runtime_error("Structured buffer dump payload size mismatch");
+
+    std::filesystem::path filename(info.filename);
+    std::filesystem::create_directories(filename.parent_path());
+
+    VulkanBufferDumpHeader header = {};
+    memcpy(header.magic, "VKBDUMP", 7);
+    header.magic[7] = '\0';
+    header.version = 1;
+    header.header_size = sizeof(VulkanBufferDumpHeader);
+    header.metadata_json_bytes = static_cast<uint64_t>(info.metadata_json.size());
+    header.payload_offset = header.header_size + header.metadata_json_bytes;
+    header.payload_bytes = static_cast<uint64_t>(info.payload_bytes);
+    header.logical_bytes = static_cast<uint64_t>(info.logical_bytes);
+    header.alloc_bytes = static_cast<uint64_t>(info.alloc_bytes);
+    header.flags = info.flags;
+
+    std::ofstream stream(filename, std::ios::binary);
+    if (!stream)
+        throw std::runtime_error("Failed to open Vulkan buffer dump file: " + info.filename);
+    stream.write(reinterpret_cast<const char*>(&header), sizeof(header));
+    stream.write(info.metadata_json.data(), static_cast<std::streamsize>(info.metadata_json.size()));
+    if (!payload.empty())
+        stream.write(reinterpret_cast<const char*>(payload.data()), static_cast<std::streamsize>(payload.size()));
+    if (!stream)
+        throw std::runtime_error("Failed to write Vulkan buffer dump file: " + info.filename);
+}
+#endif
 
 
 void VulkanGSPipeline::copyFromDeviceToDevice(const _VulkanBuffer& srcBuffer, _VulkanBuffer& dstBuffer) {

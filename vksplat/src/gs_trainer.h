@@ -4,6 +4,7 @@
 
 #include "colmap_reader.h"
 
+#include <functional>
 #include <random>
 
 
@@ -135,6 +136,11 @@ public:
 
     void writePLY(std::string filename, VulkanGSPipelineBuffers& buffers);
 
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    using BufferDumpCallback = std::function<void(const std::string&, const std::string&, const std::string&)>;
+    void set_buffer_dump_callback(BufferDumpCallback callback);
+#endif
+
 private:
     std::default_random_engine rng;
 
@@ -177,6 +183,10 @@ private:
     } pipeline_morton_sort;
 
     void barrierAllGaussParams(VulkanGSPipelineBuffers& buffers);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    BufferDumpCallback buffer_dump_callback;
+    void notifyBufferDumpCheckpoint(const std::string& directory, const std::string& stage, const std::string& substage);
+#endif
 
 };
 

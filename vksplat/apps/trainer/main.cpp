@@ -32,6 +32,11 @@ struct RunOptions {
     std::string shader_dir = VKSPLAT_DEFAULT_SHADER_DIR;
     bool save_train_renders = false;
     bool save_val_renders = true;
+    bool dump_buffers = false;
+    std::string dump_dir;
+    bool dump_all_buffers = false;
+    bool dump_capacity = false;
+    uint32_t dump_seed = 42;
 };
 
 std::string ensure_trailing_slash(std::string path) {
@@ -120,6 +125,13 @@ json trainer_config_to_json(const TrainerConfig& config, const RunOptions& run_o
     result["output_ply"] = config.output_ply;
     result["train_steps"] = run_options.train_steps;
     result["save_train_renders"] = run_options.save_train_renders;
+    result["dump_buffers"] = run_options.dump_buffers;
+    if (run_options.dump_buffers) {
+        result["dump_dir"] = run_options.dump_dir;
+        result["dump_all_buffers"] = run_options.dump_all_buffers;
+        result["dump_capacity"] = run_options.dump_capacity;
+        result["dump_seed"] = run_options.dump_seed;
+    }
 
     result["dataset_dir"] = config.dataset_dir;
     result["image_dir"] = config.image_dir;
@@ -395,6 +407,27 @@ int main(int argc, char** argv) {
         "--no-val-renders",
         no_val_renders,
         "Skip validation render PNG export");
+    app.add_flag(
+        "--dump-buffers",
+        run_options.dump_buffers,
+        "Dump Vulkan buffers at named training checkpoints");
+    auto dump_dir_opt = app.add_option(
+        "--dump-dir",
+        run_options.dump_dir,
+        "Buffer dump output directory; defaults to <work_dir>/buffer_dumps");
+    app.add_flag(
+        "--dump-all-buffers",
+        run_options.dump_all_buffers,
+        "Dump scratch buffers in addition to the default golden-reference buffers");
+    app.add_flag(
+        "--dump-capacity",
+        run_options.dump_capacity,
+        "Write sibling capacity payload dumps using each buffer allocation size");
+    auto dump_seed_opt = app.add_option(
+        "--dump-seed",
+        run_options.dump_seed,
+        "Shuffle seed used when --dump-buffers is enabled")
+        ->capture_default_str();
 
     auto dataset_dir_opt = app.add_option("--dataset-dir", dataset_dir, "COLMAP dataset directory")
         ->capture_default_str();
@@ -487,6 +520,25 @@ int main(int argc, char** argv) {
     try {
         app.parse(argc, argv);
 
+        const bool any_dump_option_used =
+            run_options.dump_buffers ||
+            run_options.dump_all_buffers ||
+            run_options.dump_capacity ||
+            dump_dir_opt->count() > 0 ||
+            dump_seed_opt->count() > 0;
+#if !VKSPLAT_ENABLE_BUFFER_DUMPS
+        if (any_dump_option_used) {
+            throw std::runtime_error(
+                "Buffer dump flags require rebuilding with -DVKSPLAT_ENABLE_BUFFER_DUMPS=ON");
+        }
+#else
+        if (!run_options.dump_buffers &&
+            (run_options.dump_all_buffers || run_options.dump_capacity ||
+             dump_dir_opt->count() > 0 || dump_seed_opt->count() > 0)) {
+            throw std::runtime_error("Use --dump-buffers together with other buffer dump options");
+        }
+#endif
+
         TrainerConfig config = strategy == "mcmc" ? make_mcmc_trainer_config() :
                                                     make_default_trainer_config();
         config.strategy = trainer_strategy_from_string(strategy);
@@ -539,14 +591,34 @@ int main(int argc, char** argv) {
         output_ply_name = config.output_ply;
         apply_config_paths(config, output_ply_name);
         run_options.shader_dir = ensure_trailing_slash(run_options.shader_dir);
+        const fs::path output_dir_path(config.output_dir);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        if (run_options.dump_buffers) {
+            if (run_options.dump_dir.empty()) {
+                run_options.dump_dir = path_string(output_dir_path / "buffer_dumps");
+            } else {
+                run_options.dump_dir = path_string(fs::path(run_options.dump_dir));
+            }
+        }
+#endif
 
         std::cout << "Work dir: " << config.output_dir << "\n\n";
 
         VkSplatTrainingSession session;
         session.initialize(run_options.shader_dir, run_options.device_id);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        if (run_options.dump_buffers) {
+            VkSplatTrainingSession::BufferDumpConfig dump_config;
+            dump_config.enabled = true;
+            dump_config.dump_all_buffers = run_options.dump_all_buffers;
+            dump_config.dump_capacity = run_options.dump_capacity;
+            dump_config.root_dir = run_options.dump_dir;
+            dump_config.run_id = output_dir_path.filename().string();
+            session.configure_buffer_dumps(dump_config);
+        }
+#endif
         auto metadata = session.set_train_config(config);
 
-        const fs::path output_dir_path(config.output_dir);
         write_json_file(output_dir_path / "config.json", trainer_config_to_json(config, run_options));
         write_json_file(output_dir_path / "train.json", metadata_to_json(metadata));
 
@@ -556,7 +628,12 @@ int main(int argc, char** argv) {
 
         std::vector<size_t> shuffle_idx(session.num_train());
         std::iota(shuffle_idx.begin(), shuffle_idx.end(), 0);
-        std::mt19937 rng(std::random_device{}());
+        std::mt19937 rng;
+        if (run_options.dump_buffers) {
+            rng.seed(run_options.dump_seed);
+        } else {
+            rng.seed(std::random_device{}());
+        }
 
         auto t0 = std::chrono::high_resolution_clock::now();
         const int progress_interval = std::max(1, run_options.train_steps / 100);

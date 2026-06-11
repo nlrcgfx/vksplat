@@ -10,6 +10,7 @@ option(VKSPLAT_BUILD_PYTHON "Build pybind11 Python module" ON)
 option(VKSPLAT_BUILD_APPS "Build VkSplat C++ applications" ON)
 option(VKSPLAT_EMULATE_INT64 "Compile C++ and shaders for emulated int64 tile bounds" OFF)
 option(VKSPLAT_EMULATE_F32_ATOMIC "Compile C++ and shaders for emulated f32 atomics" OFF)
+option(VKSPLAT_ENABLE_BUFFER_DUMPS "Enable Vulkan buffer dump support" OFF)
 
 set(VKSPLAT_USE_EMULATED_INT64_VALUE 0)
 if(VKSPLAT_EMULATE_INT64)
@@ -19,6 +20,11 @@ endif()
 set(VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE 0)
 if(VKSPLAT_EMULATE_F32_ATOMIC)
     set(VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE 1)
+endif()
+
+set(VKSPLAT_ENABLE_BUFFER_DUMPS_VALUE 0)
+if(VKSPLAT_ENABLE_BUFFER_DUMPS)
+    set(VKSPLAT_ENABLE_BUFFER_DUMPS_VALUE 1)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
@@ -73,6 +79,7 @@ target_include_directories(vksplat_core PUBLIC src)
 target_compile_definitions(vksplat_core PUBLIC
     VKSPLAT_USE_EMULATED_INT64=${VKSPLAT_USE_EMULATED_INT64_VALUE}
     VKSPLAT_USE_EMULATED_F32_ATOMIC=${VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
+    VKSPLAT_ENABLE_BUFFER_DUMPS=${VKSPLAT_ENABLE_BUFFER_DUMPS_VALUE}
 )
 
 target_link_libraries(vksplat_core PUBLIC

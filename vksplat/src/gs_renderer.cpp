@@ -380,6 +380,26 @@ void VulkanGSRenderer::executeRasterizeBackward(
     const VulkanGSRendererUniforms& uniforms,
     VulkanGSPipelineBuffers& buffers
 ) {
+    auto rasterBackwardVariantName = [](RasterBackwardImpl impl) -> const char* {
+        switch (impl) {
+            case RasterBackwardImpl::PerPixel:
+                return "per_pixel";
+            case RasterBackwardImpl::PerSplat:
+                return "per_splat";
+            case RasterBackwardImpl::Tensor_0_8_0:
+                return "tensor_0_8_0";
+            case RasterBackwardImpl::Tensor_0_8_8:
+                return "tensor_0_8_8";
+            case RasterBackwardImpl::Tensor_1_16_0:
+                return "tensor_1_16_0";
+            case RasterBackwardImpl::Default:
+                return "default";
+            case RasterBackwardImpl::size:
+                return "invalid";
+        }
+        return "unknown";
+    };
+
     std::shared_ptr<void> timer = nullptr;
     RasterBackwardImpl scheduled_impl = RasterBackwardImpl::Default;
     if (RASTERIZE_BACKWARD_USE_SCHEDULING) {
@@ -400,7 +420,9 @@ void VulkanGSRenderer::executeRasterizeBackward(
     }
     else {
         timer = std::make_shared<PerfTimer::Timer<PerfTimer::RasterizeBackward>>(this);
+        scheduled_impl = RasterBackwardImpl::PerSplat;
     }
+    last_raster_backward_variant = rasterBackwardVariantName(scheduled_impl);
 
     size_t num_elements = buffers.num_splats;
     
@@ -409,8 +431,10 @@ void VulkanGSRenderer::executeRasterizeBackward(
     clearDeviceBuffer(buffers.v_xy_vs, 2*num_elements);
     clearDeviceBuffer(buffers.v_inv_cov_vs_opacity, 4*num_elements);
     clearDeviceBuffer(buffers.v_rgb, 3*num_elements);
-    if (buffers.num_indices == 0)
+    if (buffers.num_indices == 0) {
+        last_raster_backward_variant = "skipped_no_indices";
         return;
+    }
     bufferMemoryBarrier({
         { buffers.n_contributors.deviceBuffer, COMPUTE_SHADER_WRITE },
         { buffers.v_pixel_state.deviceBuffer, COMPUTE_SHADER_WRITE },

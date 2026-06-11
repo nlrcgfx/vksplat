@@ -42,6 +42,10 @@ public:
     template<typename T> void copyFromDeviceToDevice(const Buffer<T>& src, Buffer<T>& dst);
     template<typename T> T readElement(const _VulkanBuffer& buffer, size_t index);
     template<typename T> void dumpRawBytesToFile(Buffer<T>& buffer, std::string filename);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    void copyRawBytesFromDevice(const _VulkanBuffer& deviceBuffer, size_t byte_count, std::vector<uint8_t>& out);
+    static void writeStructuredBufferDump(const VulkanBufferDumpFileInfo& info, const std::vector<uint8_t>& payload);
+#endif
 
     void beginCommandBatch();
     void endCommandBatch(bool use_fence = true);

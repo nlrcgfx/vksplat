@@ -127,6 +127,21 @@ void VulkanGSTrainer::initialize(const std::map<std::string, std::string> &spirv
     rng.seed(42);
 }
 
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+void VulkanGSTrainer::set_buffer_dump_callback(BufferDumpCallback callback) {
+    buffer_dump_callback = std::move(callback);
+}
+
+void VulkanGSTrainer::notifyBufferDumpCheckpoint(
+    const std::string& directory,
+    const std::string& stage,
+    const std::string& substage
+) {
+    if (buffer_dump_callback)
+        buffer_dump_callback(directory, stage, substage);
+}
+#endif
+
 
 void VulkanGSTrainer::load_colmap_dataset(
     const TrainerConfig &config,
@@ -665,6 +680,9 @@ void VulkanGSTrainer::executeComputeSSIMGradient(
     bufferMemoryBarrier({
         { ssim_map.deviceBuffer, COMPUTE_SHADER_WRITE },
     }, COMPUTE_SHADER_READ);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    notifyBufferDumpCheckpoint("04_loss/after_ssim_forward", "loss", "after_ssim_forward");
+#endif
     executeCompute(
         {{w, VKSPLAT_SSIM_BLOCK_X}, {h, VKSPLAT_SSIM_BLOCK_X}},
         shader_uniforms, 3*sizeof(Uniform32_t),
@@ -676,6 +694,9 @@ void VulkanGSTrainer::executeComputeSSIMGradient(
             resizeDeviceBuffer(buffers.v_pixel_state, 4*num_pixels),
         }
     );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    notifyBufferDumpCheckpoint("04_loss/after_ssim_backward", "loss", "after_ssim_backward");
+#endif
 
     if (buffer_swapped)
         std::swap(train_image.deviceBuffer, buffers.ref_image.deviceBuffer);
@@ -825,6 +846,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
         { buffers.default_grad.deviceBuffer, COMPUTE_SHADER_READ_WRITE },
         { buffers.default_radii.deviceBuffer, COMPUTE_SHADER_READ_WRITE },
     }, COMPUTE_SHADER_READ);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    notifyBufferDumpCheckpoint("06_post_backward/after_default_update_state", "post_backward", "after_default_update_state");
+#endif
 
     if (step > uniforms.refine_start_iter
         && step % uniforms.refine_every == 0
@@ -848,6 +872,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
             { buffers.default_dupli_mask.deviceBuffer, COMPUTE_SHADER_WRITE },
             { buffers.default_split_mask.deviceBuffer, COMPUTE_SHADER_WRITE },
         }, COMPUTE_SHADER_READ);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        notifyBufferDumpCheckpoint("06_post_backward/after_default_grow_mask", "post_backward", "after_default_grow_mask");
+#endif
 
         int num_dupli = executeSum(buffers, buffers.default_dupli_mask);
         int num_split = executeSum(buffers, buffers.default_split_mask);
@@ -898,6 +925,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
                 }
             );
             barrierAllGaussParams(buffers);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_default_duplicate", "post_backward", "after_default_duplicate");
+#endif
         }
 
         if (num_split > 0) {
@@ -928,6 +958,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
                 }
             );
             barrierAllGaussParams(buffers);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_default_split", "post_backward", "after_default_split");
+#endif
         }
 
         // prune GS
@@ -948,6 +981,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
         bufferMemoryBarrier({
             { buffers.default_keep_mask.deviceBuffer, COMPUTE_SHADER_WRITE },
         }, COMPUTE_SHADER_READ);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        notifyBufferDumpCheckpoint("06_post_backward/after_default_prune_mask", "post_backward", "after_default_prune_mask");
+#endif
 
         int num_keep = executeSum(buffers, buffers.default_keep_mask);
         int num_prune = (int)num_splats - num_keep;
@@ -1007,6 +1043,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
             barrierAllGaussParams(buffers);
 
             buffers.num_splats = num_keep;
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_default_prune", "post_backward", "after_default_prune");
+#endif
         }
 
         // reset running states
@@ -1043,6 +1082,9 @@ void VulkanGSTrainer::executeDefaultPostBackward(
             { buffers.scales_opacs.deviceBuffer, COMPUTE_SHADER_WRITE },
             { buffers.g_scales_opacs.deviceBuffer, COMPUTE_SHADER_WRITE },
         }, COMPUTE_SHADER_READ);
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        notifyBufferDumpCheckpoint("06_post_backward/after_default_reset_opa", "post_backward", "after_default_reset_opa");
+#endif
         printf("\nreset opacity\n");
         fflush(stdout);
     }
@@ -1095,6 +1137,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                 resizeDeviceBuffer(buffers.mcmc_sample_probs, num_splats),
             }
         );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_relocation_probs", "post_backward", "after_mcmc_relocation_probs");
+#endif
 
         // 2) Prefix sum the probability array
         bufferMemoryBarrier({
@@ -1123,6 +1168,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                 buffers.mcmc_n_idx_buffer.deviceBuffer,
             }
         );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+        notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_relocation_index_map", "post_backward", "after_mcmc_relocation_index_map");
+#endif
 
         // (optional) get number of relocated Gaussians for printing
         int32_t num_relocate = executeSum(buffers, buffers.mcmc_n_idx_buffer);
@@ -1145,6 +1193,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                     buffers.g_scales_opacs.deviceBuffer,
                 }
             );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_compute_relocation", "post_backward", "after_mcmc_compute_relocation");
+#endif
 
             // 5) Update attributes for Gaussians relocated from
             barrierAllGaussParams(buffers);
@@ -1165,6 +1216,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                     buffers.g_scales_opacs.deviceBuffer,
                 }
             );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_update_relocation", "post_backward", "after_mcmc_update_relocation");
+#endif
 
         }
 
@@ -1188,6 +1242,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                     buffers.mcmc_sample_probs.deviceBuffer,
                 }
             );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_add_probs", "post_backward", "after_mcmc_add_probs");
+#endif
 
             // 2) Prefix sum the probability array
             bufferMemoryBarrier({
@@ -1215,6 +1272,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                     buffers.mcmc_n_idx_buffer.deviceBuffer,
                 }
             );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_add_index_map", "post_backward", "after_mcmc_add_index_map");
+#endif
 
             // 4) [N] Compute attributes for Gaussians added to
             bufferMemoryBarrier({
@@ -1229,6 +1289,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
                     buffers.scales_opacs.deviceBuffer,
                 }
             );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_compute_add", "post_backward", "after_mcmc_compute_add");
+#endif
 
             // 5) [dN] Update attributes for Gaussians added from
             size_t alloc_size = num_splats;
@@ -1254,6 +1317,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
             );
 
             buffers.num_splats = new_num_splats;
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+            notifyBufferDumpCheckpoint("06_post_backward/after_mcmc_update_add", "post_backward", "after_mcmc_update_add");
+#endif
         }
 
         printf("\n%d relocate, %d add -> %d splats\n", num_relocate, (int)num_add, (int)buffers.num_splats);
@@ -1288,6 +1354,9 @@ void VulkanGSTrainer::executeMCMCPostBackward(
             buffers.scales_opacs.deviceBuffer,
         }
     );
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    notifyBufferDumpCheckpoint("06_post_backward/after_noise", "post_backward", "after_noise");
+#endif
 
 }
 
@@ -1391,6 +1460,9 @@ void VulkanGSTrainer::executeMortonSorting(
     applyIndex(buffers.default_grad, 2*2);
     barrierAllGaussParams(buffers);
 
+#if VKSPLAT_ENABLE_BUFFER_DUMPS
+    notifyBufferDumpCheckpoint("06_post_backward/after_morton_sort", "post_backward", "after_morton_sort");
+#endif
 }
 
 
