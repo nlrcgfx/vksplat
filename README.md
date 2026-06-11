@@ -156,6 +156,52 @@ Use `vksplat_train --help` for all CLI11 options, including optimizer and densif
 
 If your device lacks shader int64 or float32 atomic add support, build C++ and shaders with matching emulation flags instead of editing shader files by hand. For CMake, configure with `-DVKSPLAT_EMULATE_INT64=ON` and/or `-DVKSPLAT_EMULATE_F32_ATOMIC=ON`, then recompile shaders. For direct shader compilation, pass `--emulate-int64 1` and/or `--emulate-f32-atomic 1` to `compile_shaders.py`.
 
+#### Vulkan buffer dumps (C++ trainer only)
+
+Buffer dumping is an optional compile-time feature for capturing GPU buffer snapshots at named training checkpoints. It is intended for golden-reference debugging and regression comparison, not for normal training runs.
+
+**Build with dump support enabled** (`VKSPLAT_ENABLE_BUFFER_DUMPS` defaults to `OFF`):
+
+```bash
+cd /path/to/vksplat
+cmake --preset release -DVKSPLAT_ENABLE_BUFFER_DUMPS=ON
+cmake --build --preset release --target vksplat_train
+```
+
+On Windows you can keep a separate dump-enabled preset in local `CMakeUserPresets.json` (gitignored) that inherits `release` and sets `VKSPLAT_ENABLE_BUFFER_DUMPS=ON`, for example into `build/release-dumps/`.
+
+**Run the trainer with dumps:**
+
+```bash
+./build/release/apps/trainer/vksplat_train \
+  --dataset-dir /path/to/colmap-scene \
+  --output-dir /path/to/outputs \
+  --image-dir images_4 \
+  --sparse-dir sparse/0 \
+  --dump-buffers \
+  --train-steps 1 \
+  --no-val-renders
+```
+
+Dump-related CLI flags:
+
+- `--dump-buffers` — enable checkpoint dumps (required for all other dump flags)
+- `--dump-dir PATH` — output root; defaults to `<work_dir>/buffer_dumps`
+- `--dump-all-buffers` — also dump scratch buffers, not just the default golden-reference set
+- `--dump-capacity` — write sibling `.capacity.vkbd` files sized to each buffer allocation
+- `--dump-seed N` — fixed shuffle seed for reproducible step ordering (default `42`)
+
+**Output layout:** under the dump root you get a top-level `manifest.json`, an `init/after_dataset_load/` checkpoint, and per-step trees such as `step_000000/00_step_start/`, `01_projection_forward/`, `02_process_tiles/after_sort/`, `03_rasterize_forward/`, `04_loss/...`, `05_backward/...`, and `06_post_backward/...`. Each checkpoint directory contains a `manifest.json` and one `.vkbd` file per dumped buffer.
+
+**Inspect and compare dumps** with `vksplat/scripts/vkbd_tool.py` (requires `numpy`):
+
+```bash
+python vksplat/scripts/vkbd_tool.py inspect outputs/<run>/buffer_dumps/step_000000/00_step_start/xyz_ws.vkbd --array
+python vksplat/scripts/vkbd_tool.py compare expected/buffer_dumps actual/buffer_dumps
+```
+
+If dump flags are passed to a build without `VKSPLAT_ENABLE_BUFFER_DUMPS=ON`, `vksplat_train` exits with an error asking you to rebuild with that option.
+
 
 ## Development
 
