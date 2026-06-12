@@ -153,6 +153,10 @@ constants above.
 | `radix_sort_sorted` | radix sort | `[gpu]` | 64 | Already-sorted input regression guard |
 | `radix_sort_reverse` | radix sort | `[gpu]` | 64 | Reverse-sorted input regression guard |
 
+Fixture and golden directories are nested by kernel or pipeline family
+(`fixtures/cumsum/single_pass/`, `fixtures/sum/basic/`, `fixtures/radix_sort/single_partition/`, etc.).
+Tests still resolve cases by globally unique manifest `stage_name`; `golden_masters/` mirrors `fixtures/`.
+
 Current fixture data is intentionally small, except for
 `cumsum_multi_block_two_level`, which uses the `B * B + 1` input size (`B` =
 `CUMSUM_BLOCK_SIZE`); this is the minimum that crosses the second cumsum

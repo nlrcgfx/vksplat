@@ -94,14 +94,16 @@ Per-dispatch workflow: load fixture, upload `StorageBuffer`, bind `StorageBindin
 test_data/
   generate_fixtures.py
   fixtures/
-    <stage>/
+    <group>/<case>/
       manifest.json
       *.bin
   golden_masters/
-    <stage>/
+    <group>/<case>/
       manifest.json
       *.bin
 ```
+
+Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`. Manifest `stage_name` stays globally unique; tests resolve paths by scanning manifests.
 
 Each `manifest.json` records:
 

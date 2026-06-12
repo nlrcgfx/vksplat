@@ -10,9 +10,11 @@ For the broader test coverage matrix, known gaps, and hardening roadmap, see the
 
 ## Layout
 
-- `generate_fixtures.py`: source of truth for synthetic fixture values, expected values, manifests, and binary payloads
-- `fixtures/<stage>/`: inputs, initial mutable output buffers, and `manifest.json`
-- `golden_masters/<stage>/`: expected outputs and `manifest.json`
+- `generate_fixtures.py`: source of truth for synthetic fixture values, expected values, manifests, binary payloads, and nested folder layout
+- `fixtures/<group>/<case>/`: inputs, initial mutable output buffers, and `manifest.json`
+- `golden_masters/<group>/<case>/`: expected outputs and `manifest.json` (mirrors `fixtures/` paths)
+
+Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`. Each case directory holds one globally unique `stage_name` in its manifest (for example `cumsum_single_pass` under `fixtures/cumsum/single_pass/`).
 
 All `.bin` files are raw little-endian buffers interpreted through the stage manifest
 `dtype` and `shape`.
@@ -114,8 +116,9 @@ python test_data\generate_fixtures.py --check
 | `radix_sort_sorted` | full radix sort pipeline | 64 already-sorted generated keys | unchanged stable sorted keys/indices | Regression guard for sorted input. |
 | `radix_sort_reverse` | full radix sort pipeline | 64 reverse-sorted generated keys | CPU stable-sort by key | Regression guard for reverse-sorted input. |
 
-Fixture `stage_name` values are descriptive (`cumsum_single_pass`, `radix_sort_single_partition`);
-manifest `subgraph` groups related cases (`utility`, `radix_sort`, `harness`). Utility
+Fixture `stage_name` values are globally unique (`cumsum_single_pass`, `radix_sort_single_partition`);
+manifest `subgraph` records the porting family (`utility`, `radix_sort`, `harness`), while
+on-disk folders group by kernel or pipeline (`cumsum/`, `sum/`, `where/`, `radix_sort/`, `harness/`). Utility
 shader fixtures validate isolated dispatch behavior before larger ref-parity fixtures
 are added. The radix sort fixtures validate the isolated Phase 2 sort pipeline. Their
 manifests list the working buffers, while per-pass descriptor order is asserted in
@@ -187,7 +190,7 @@ Use this path only for reference-derived payloads that cannot be expressed direc
 Example:
 
 ```powershell
-python next\nlrc_vksplat\scripts\vkbd_to_bins.py --vkbd outputs\run\buffer.vkbd --out test_data\fixtures\sum\input.bin --dtype int32 --shape 4
+python next\nlrc_vksplat\scripts\vkbd_to_bins.py --vkbd outputs\run\buffer.vkbd --out test_data\fixtures\sum\basic\input.bin --dtype int32 --shape 4
 ```
 
 ## GPU Test Policy

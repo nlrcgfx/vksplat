@@ -13,8 +13,8 @@
 namespace nlrc::vksplat::tests {
 
 [[nodiscard]] std::filesystem::path test_data_root();
-[[nodiscard]] std::filesystem::path fixture_dir(const std::string &stage_folder);
-[[nodiscard]] std::filesystem::path golden_dir(const std::string &stage_folder);
+[[nodiscard]] std::filesystem::path fixture_dir(const std::string &stage_name);
+[[nodiscard]] std::filesystem::path golden_dir(const std::string &stage_name);
 
 [[nodiscard]] std::vector<std::uint8_t> load_binary_file(const std::filesystem::path &path);
 

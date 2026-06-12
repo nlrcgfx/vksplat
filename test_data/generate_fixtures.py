@@ -98,6 +98,33 @@ def sorted_indices_by_key(keys: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(sorted(range(len(keys)), key=lambda index: keys[index]))
 
 
+def stage_relpath(stage_name: str, subgraph: str) -> Path:
+    if subgraph == "harness":
+        if stage_name == "harness_smoke":
+            return Path("harness") / "smoke"
+        raise ValueError(f"unsupported harness stage: {stage_name}")
+
+    if subgraph == "utility":
+        if stage_name.startswith("cumsum_"):
+            return Path("cumsum") / stage_name.removeprefix("cumsum_")
+        if stage_name == "sum":
+            return Path("sum") / "basic"
+        if stage_name.startswith("sum_"):
+            return Path("sum") / stage_name.removeprefix("sum_")
+        if stage_name == "where":
+            return Path("where") / "basic"
+        if stage_name.startswith("where_"):
+            return Path("where") / stage_name.removeprefix("where_")
+        raise ValueError(f"unsupported utility stage: {stage_name}")
+
+    if subgraph == "radix_sort":
+        if stage_name.startswith("radix_sort_"):
+            return Path("radix_sort") / stage_name.removeprefix("radix_sort_")
+        raise ValueError(f"unsupported radix sort stage: {stage_name}")
+
+    raise ValueError(f"unsupported subgraph for stage layout: {subgraph}")
+
+
 def buffer_data(name: str, dtype: str, values: Iterable[int | float], epsilon: float | None = None) -> BufferData:
     materialized = tuple(values)
     return BufferData(name=name, dtype=dtype, shape=(len(materialized),), values=materialized, epsilon=epsilon)
@@ -356,8 +383,9 @@ def write_manifest(path: Path, manifest: dict) -> None:
 
 
 def write_case(root: Path, case: FixtureCase) -> None:
-    fixture_dir = root / "fixtures" / case.stage_name
-    golden_dir = root / "golden_masters" / case.stage_name
+    stage_path = stage_relpath(case.stage_name, case.subgraph)
+    fixture_dir = root / "fixtures" / stage_path
+    golden_dir = root / "golden_masters" / stage_path
     fixture_dir.mkdir(parents=True, exist_ok=True)
     golden_dir.mkdir(parents=True, exist_ok=True)
 
