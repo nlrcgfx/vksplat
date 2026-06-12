@@ -27,5 +27,11 @@
   },
   "search.exclude": {
     "**/next/nlrc_vksplat/build/**": true
-  }
+  },
+
+  "slang.additionalSearchPaths": [
+    "${workspaceFolder}/next/nlrc_vksplat/build/windows-debug/generated",
+    "${workspaceFolder}/next/nlrc_vksplat/build/windows-release/generated",
+    "${workspaceFolder}/next/nlrc_vksplat/slang"
+  ]
 }
