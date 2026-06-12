@@ -50,17 +50,17 @@ class ShaderSource:
     deps: list[str] = field(default_factory=list)
 
 
-def spirv_symbols(job_name: str) -> tuple[str, str]:
-    """Map a snake_case job name to clang-tidy-compliant embed symbol names."""
+def spirv_symbol(job_name: str) -> str:
+    """Map a snake_case job name to a clang-tidy-compliant embed symbol name."""
     parts = [part for part in job_name.split("_") if part]
     if not parts:
         raise ValueError("shader job name must not be empty")
     camel = "".join(part[:1].upper() + part[1:] for part in parts)
-    return f"k{camel}Spirv", f"k{camel}SpirvWordCount"
+    return f"k{camel}Spirv"
 
 
-def spirv_to_header(spirv_bytes: bytes, job_name: str) -> str:
-    array_symbol, word_count_symbol = spirv_symbols(job_name)
+def spirv_to_header(spirv_bytes: bytes, job_name: str) -> tuple[str, int]:
+    array_symbol = spirv_symbol(job_name)
     if len(spirv_bytes) % 4 != 0:
         raise ValueError(f"SPIR-V size for {job_name} is not a multiple of 4 bytes")
     words = [
@@ -68,24 +68,24 @@ def spirv_to_header(spirv_bytes: bytes, job_name: str) -> str:
         for i in range(0, len(spirv_bytes), 4)
     ]
     body = ",\n    ".join(f"0x{word:08x}u" for word in words)
-    return "\n".join(
+    header = "\n".join(
         [
             "#pragma once",
             "",
+            "#include <array>",
             "#include <cstdint>",
             "",
             "namespace nlrc::vksplat::shaders {",
             "",
-            f"inline constexpr uint32_t {array_symbol}[] = {{",
+            f"inline constexpr std::array<uint32_t, {len(words)}> {array_symbol} = {{",
             f"    {body}",
             "};",
-            "",
-            f"inline constexpr uint32_t {word_count_symbol} = {len(words)};",
             "",
             "}  // namespace nlrc::vksplat::shaders",
             "",
         ]
     )
+    return header, len(words)
 
 
 class ShaderCompiler:
@@ -174,21 +174,18 @@ class ShaderCompiler:
         cmd.extend(["-o", str(spirv_path)])
 
         subprocess.run(cmd, capture_output=True, text=True, check=True)
-        header_path.write_text(
-            spirv_to_header(spirv_path.read_bytes(), job.name),
-            encoding="utf-8",
-        )
+        header_text, word_count = spirv_to_header(spirv_path.read_bytes(), job.name)
+        header_path.write_text(header_text, encoding="utf-8")
         spirv_path.unlink(missing_ok=True)
 
-        array_symbol, word_count_symbol = spirv_symbols(job.name)
         self.manifest_modules.append(
             {
                 "name": job.name,
                 "source": source.source,
                 "language": source.language,
                 "header": header_path.name,
-                "array_symbol": array_symbol,
-                "word_count_symbol": word_count_symbol,
+                "array_symbol": spirv_symbol(job.name),
+                "word_count": word_count,
                 "defines": job.defines,
                 "deps": source.deps,
             }
@@ -209,21 +206,18 @@ class ShaderCompiler:
         cmd.extend(["-o", str(spirv_path)])
 
         subprocess.run(cmd, capture_output=True, text=True, check=True)
-        header_path.write_text(
-            spirv_to_header(spirv_path.read_bytes(), job.name),
-            encoding="utf-8",
-        )
+        header_text, word_count = spirv_to_header(spirv_path.read_bytes(), job.name)
+        header_path.write_text(header_text, encoding="utf-8")
         spirv_path.unlink(missing_ok=True)
 
-        array_symbol, word_count_symbol = spirv_symbols(job.name)
         self.manifest_modules.append(
             {
                 "name": job.name,
                 "source": source.source,
                 "language": source.language,
                 "header": header_path.name,
-                "array_symbol": array_symbol,
-                "word_count_symbol": word_count_symbol,
+                "array_symbol": spirv_symbol(job.name),
+                "word_count": word_count,
                 "defines": job.defines,
                 "deps": source.deps,
             }
@@ -243,7 +237,7 @@ class ShaderCompiler:
                 print(f"[OK] Wrote {header_path.name}")
 
         manifest = {
-            "schema": 1,
+            "schema": 2,
             "use_emulated_int64": self.shader_config["use_emulated_int64"],
             "use_emulated_f32_atomic": self.shader_config["use_emulated_f32_atomic"],
             "modules": self.manifest_modules,

@@ -50,14 +50,15 @@ Host tests may read `NLRC_VKSPLAT_SHADER_CONFIG_JSON` to verify generated shader
 
 Each `*_spirv.hpp` is emitted by `spirv_to_header()` at shader build time. The shader build does not run clang-format or clang-tidy; C++ lint is handled by repo-root pre-commit hooks.
 
-| Job name | Array symbol | Word-count symbol |
-|----------|--------------|-------------------|
-| `smoke` | `kSmokeSpirv` | `kSmokeSpirvWordCount` |
+| Job name | Array symbol | Manifest `word_count` |
+|----------|--------------|----------------------|
+| `smoke` | `kSmokeSpirv` | SPIR-V dword count |
+
+`shader_manifest.json` uses schema `2`. Each module entry includes numeric `word_count` (no separate word-count C++ symbol).
 
 ```cpp
 namespace nlrc::vksplat::shaders {
-inline constexpr uint32_t kSmokeSpirv[] = { ... };
-inline constexpr uint32_t kSmokeSpirvWordCount = ...;
+inline constexpr std::array<uint32_t, N> kSmokeSpirv = { ... };
 }
 ```
 

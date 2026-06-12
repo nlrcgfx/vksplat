@@ -87,7 +87,7 @@ In C++ declarations below `namespace nlrc::vksplat` in the config header:
 ## Generated C++
 
 - `*_spirv.hpp` is emitted only by `spirv_to_header()` in `scripts/compile_shaders.py`; never hand-edit it.
-- Embed symbols are `k{Name}Spirv[]` and `k{Name}SpirvWordCount` in `nlrc::vksplat::shaders`.
+- Embed symbols are `std::array<uint32_t, N> k{Name}Spirv` in `nlrc::vksplat::shaders`.
 - Generated headers are build artifacts under `build/<preset>/generated/`; do not commit or hand-format them.
 
 ## Tooling

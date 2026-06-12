@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <type_traits>
 #include <vector>
@@ -54,6 +55,16 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] Span<const T> make_span(const std::vector<T> &values) noexcept {
+  return {values.data(), values.size()};
+}
+
+template <typename T, std::size_t Size>
+[[nodiscard]] constexpr Span<T> make_span(std::array<T, Size> &values) noexcept {
+  return {values.data(), values.size()};
+}
+
+template <typename T, std::size_t Size>
+[[nodiscard]] constexpr Span<const T> make_span(const std::array<T, Size> &values) noexcept {
   return {values.data(), values.size()};
 }
 
