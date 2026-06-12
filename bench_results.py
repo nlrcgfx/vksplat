@@ -41,7 +41,7 @@ def print(*args, **kwargs):
 def tabulate_wrapper(table):
     from tabulate import tabulate
     builtin_print(tabulate(table, tablefmt="simple_grid"))
-    
+
     import re
     html = tabulate(table, tablefmt='html')
     html = re.sub(r'[ ]*\n[ ]*', '<br/>', html)
@@ -55,7 +55,7 @@ def tabulate_wrapper(table):
 
     #html = re.sub(r'\033\[[\d\;]*m', '', html)
     #assert '\033' not in html
-    
+
     html = re.sub(r'\033\[91m(.*?)\033\[m', r'<span style="color:red">\1</span>', html)
     html = re.sub(r'\033\[92m(.*?)\033\[m', r'<span style="color:green">\1</span>', html)
     html = re.sub(r'\033\[93m(.*?)\033\[m', r'<span style="color:darkorange">\1</span>', html)
@@ -69,7 +69,7 @@ def tabulate_wrapper(table):
     html = re.sub(r'\033\[48;5;236m(.*?)\033\[m', r'<span style="color:white;background-color:gray;width:100%;display:inline-block;padding:0 0 0 0.25em">\1&nbsp;</span>', html)
     html = re.sub(r'\033\[38;2;(\d+);(\d+);(\d+)m(.*?)\033\[m', r'<span style="color:rgb(\1,\2,\3)">\4</span>', html)
     #print(re.findall(r'\033\[[\d\;]*m', html))
-    
+
     _html_components.append(html)
 
 def get_results(workdir):
@@ -392,7 +392,7 @@ def compare_results(workdir1, prefix1, workdir2, prefix2):
 
         row1.append(format_table_str(data1[-1]-data2[-1], [0.0]*100))
         #row2.append(format_table_str(data2[-1]-data1[-1], [0.0]*100))
-        
+
         s = signs[:len(data1[-1])]
         is_worse = s*data1[-1] < s*data2[-1]
         data1, data2 = np.stack(data1)[:-1], np.stack(data2)[:-1]
@@ -530,7 +530,7 @@ def compare_breakdown(workdir1, prefix1, workdir2, prefix2):
 
         row1.append(format_table_str(data1[-1]-data2[-1], [0.0]*100, _th=0.02*data2[-1][-1]))
         row1.append(format_table_str(100*(data1[-1]/data2[-1]-1), [0.0]*100, "{:.1f}", 10))
-        
+
         is_worse = data1[-1] > data2[-1]
         data1, data2 = np.stack(data1)[:-1], np.stack(data2)[:-1]
         row1.append(format_table_str(
@@ -584,12 +584,12 @@ def main_compare(workdir1=None, workdir2=None):
 if __name__ == "__main__":
     #main_breakdown(); exit(0)
     main_compare(); #exit(0)
-    
+
     if len(_html_components) > 0:
-    
+
         from datetime import datetime
         _html_components.append("<br/><hr/><p>Generated: " + datetime.now().astimezone().isoformat() + "</p>")
-        
+
         html_out_path = "D:\\\\harry\\outputs\\index.html"  # adjust if needed
         with open(html_out_path, "w", encoding='utf-8') as fp:
             fp.write('<!DOCTYPE HTML><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>')
