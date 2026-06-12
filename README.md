@@ -32,11 +32,19 @@ cmake --build --preset windows-debug
 ctest --preset windows-debug
 ```
 
-CMake profile options (subset of config): `NLRC_VKSPLAT_EMULATE_INT64`, `NLRC_VKSPLAT_EMULATE_F32_ATOMIC`. OHOS presets enable emulated int64 by default. Full numeric constants live in `src/nlrc_vksplat_config.hpp`. See `.cursor/rules/shader-build-embed.mdc`.
+CMake profile options are limited to build-profile toggles: `NLRC_VKSPLAT_EMULATE_INT64` and `NLRC_VKSPLAT_EMULATE_F32_ATOMIC`. CMake propagates these to C++ compile definitions and generated shader config (`shader_config.json` / `config_generated.*`); OHOS presets enable emulated int64 by default. Numeric shader constants such as tile sizes, subgroup sizes, and tensor tables live in `src/nlrc_vksplat_config.hpp`, not CMake options. See `.cursor/rules/shader-build-embed.mdc`.
 
 **VS Code / Cursor:** open the repo root, install the recommended extensions when prompted, then run **CMake: Configure** (or `cmake --preset windows-debug`) so `build/compile_commands.json` is available for clangd. Use a Developer PowerShell terminal when building with MSVC.
 
-**C++ lint:** every build runs blocking `clang-format` + `clang-tidy` via the `nlrc_vksplat_lint` target. Shader generation also lint-checks each `*_spirv.hpp`. Run lint alone with `cmake --build --preset windows-debug --target nlrc_vksplat_lint`. Style rules: `.cursor/rules/cpp-coding-style.mdc`.
+**C++ lint:** builds do not run lint. Install pre-commit and run the full-tree hooks before committing:
+
+```powershell
+pipx install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+The hooks run `clang-format` and `clang-tidy` over `next/nlrc_vksplat/`, plus repository hygiene checks for trailing whitespace, final newlines, merge markers, oversized files, JSON, and TOML. Configure `windows-debug` first so `build/windows-debug/compile_commands.json` exists, or set `NLRC_VKSPLAT_TIDY_BUILD_DIR` to another configured build directory. Shader builds do not require `clang-format` or `clang-tidy`; generated `*_spirv.hpp` files remain build artifacts. Style rules: `.cursor/rules/cpp-coding-style.mdc`.
 
 ## Quick start (reference)
 

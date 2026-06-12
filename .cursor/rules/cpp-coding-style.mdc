@@ -88,14 +88,14 @@ In C++ declarations below `namespace nlrc::vksplat` in the config header:
 
 - `*_spirv.hpp` is emitted only by `spirv_to_header()` in `scripts/compile_shaders.py`; never hand-edit it.
 - Embed symbols are `k{Name}Spirv[]` and `k{Name}SpirvWordCount` in `nlrc::vksplat::shaders`.
-- Generated headers must pass the same clang-format and clang-tidy checks as hand-written code; shader build enforces this.
+- Generated headers are build artifacts under `build/<preset>/generated/`; do not commit or hand-format them.
 
 ## Tooling
 
-Blocking lint:
+Pre-commit lint:
 
-- CMake target `nlrc_vksplat_lint` runs `scripts/lint_cpp.py` with clang-format `--Werror` and clang-tidy.
-- `nlrc_vksplat_core`, `nlrc_vksplat_gpu`, and `nlrc_vksplat_tests` depend on lint when those targets exist.
-- Shader generation runs clang-format/tidy on each `*_spirv.hpp` before the build proceeds.
+- CMake builds do not run lint, and shader generation does not require clang-format or clang-tidy.
+- Repo-root `.pre-commit-config.yaml` runs full-tree clang-format/clang-tidy hooks plus generic repository hygiene checks.
+- Configure `windows-debug` first so `next/nlrc_vksplat/build/windows-debug/compile_commands.json` exists, or set `NLRC_VKSPLAT_TIDY_BUILD_DIR`.
 
-After any C++ or `spirv_to_header()` change, configure a preset, then run either a full build or `cmake --build --preset <preset> --target nlrc_vksplat_lint`.
+After any C++ or `spirv_to_header()` change, run `pre-commit run --all-files` and the relevant CMake build/test target.

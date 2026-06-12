@@ -38,9 +38,6 @@ if(NLRC_VKSPLAT_BUILD_TESTS)
 endif()
 nlrc_vksplat_setup_tests()
 
-include(cmake/NlrcVksplatLint.cmake)
-nlrc_vksplat_add_lint_targets(nlrc_vksplat_core)
-
 # Sync compile commands for clangd and other tools
 include(cmake/NlrcVksplatCompileCommands.cmake)
 nlrc_vksplat_add_compile_commands_sync_target()

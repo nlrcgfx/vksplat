@@ -21,7 +21,6 @@ from generate_shader_config import generate_shader_config  # noqa: E402
 @dataclass
 class CompileConfig:
     project_dir: Path
-    build_dir: Path
     slang_src_path: Path
     shader_dst_path: Path
     generated_dir: Path
@@ -88,82 +87,6 @@ def spirv_to_header(spirv_bytes: bytes, job_name: str) -> str:
     )
 
 
-def _find_clang_format() -> Path:
-    clang_format = shutil.which("clang-format")
-    if clang_format is None:
-        raise RuntimeError("clang-format not found. Install LLVM clang-format or add it to PATH")
-    return Path(clang_format)
-
-
-def _find_clang_tidy() -> Path:
-    clang_tidy = shutil.which("clang-tidy")
-    if clang_tidy is None:
-        raise RuntimeError("clang-tidy not found. Install LLVM clang-tidy or add it to PATH")
-    return Path(clang_tidy)
-
-
-def clang_format_file(path: Path, style_file: Path) -> None:
-    clang_format = _find_clang_format()
-    subprocess.run(
-        [str(clang_format), f"-style=file:{style_file}", "-i", str(path)],
-        check=True,
-    )
-    subprocess.run(
-        [str(clang_format), f"-style=file:{style_file}", "--Werror", "--dry-run", str(path)],
-        check=True,
-    )
-
-
-def verify_header_tidy(header_path: Path, project_dir: Path, build_dir: Path, generated_dir: Path) -> None:
-    clang_tidy = _find_clang_tidy()
-    config_file = project_dir / ".clang-tidy"
-    if not config_file.exists():
-        raise RuntimeError(f"clang-tidy config not found: {config_file}")
-
-    lint_dir = generated_dir / ".lint"
-    lint_dir.mkdir(parents=True, exist_ok=True)
-    lint_cpp = lint_dir / f"{header_path.stem}_lint.cpp"
-    lint_cpp.write_text(f'#include "{header_path.name}"\n', encoding="utf-8")
-
-    compile_commands_dir = build_dir
-    compile_commands = compile_commands_dir / "compile_commands.json"
-    cmd = [
-        str(clang_tidy),
-        str(lint_cpp),
-        f"--config-file={config_file}",
-        "--header-filter=.*/generated/.*",
-        "-warnings-as-errors=*",
-    ]
-    if compile_commands.exists():
-        cmd.append(f"-p={compile_commands_dir}")
-    else:
-        print(
-            "[WARN] build/compile_commands.json not found; "
-            "run cmake configure for full tidy flags",
-            file=sys.stderr,
-        )
-
-    cmd.extend(
-        [
-            "--",
-            "-std=c++17",
-            f"-I{generated_dir}",
-        ]
-    )
-    result = subprocess.run(cmd, cwd=generated_dir, capture_output=True, text=True)
-    if result.returncode != 0:
-        message = result.stderr or result.stdout or f"clang-tidy failed for {header_path.name}"
-        raise RuntimeError(message)
-
-
-def verify_generated_cpp_header(header_path: Path, project_dir: Path, build_dir: Path, generated_dir: Path) -> None:
-    style_file = project_dir / ".clang-format"
-    if not style_file.exists():
-        raise RuntimeError(f"clang-format config not found: {style_file}")
-    clang_format_file(header_path, style_file)
-    verify_header_tidy(header_path, project_dir, build_dir, generated_dir)
-
-
 class ShaderCompiler:
     def __init__(self, config: CompileConfig):
         self.config = config
@@ -225,12 +148,6 @@ class ShaderCompiler:
             encoding="utf-8",
         )
         spirv_path.unlink(missing_ok=True)
-        verify_generated_cpp_header(
-            header_path,
-            self.config.project_dir,
-            self.config.build_dir,
-            self.config.generated_dir,
-        )
 
         array_symbol, word_count_symbol = spirv_symbols(job.name)
         self.manifest_modules.append(
@@ -279,12 +196,6 @@ def main() -> int:
         default=None,
         help="Output directory for generated headers and config (required from CMake)",
     )
-    parser.add_argument(
-        "--build-dir",
-        type=Path,
-        default=None,
-        help="CMake binary directory containing compile_commands.json",
-    )
     parser.add_argument("--slangc", type=Path, default=None)
     parser.add_argument("--glslc", type=Path, default=None)
     parser.add_argument("--emulate-int64", type=int, choices=[0, 1], required=True)
@@ -297,11 +208,9 @@ def main() -> int:
         if args.generated_dir is not None
         else (project_dir / "build" / "generated")
     )
-    build_dir = args.build_dir.resolve() if args.build_dir is not None else generated_dir.parent
 
     config = CompileConfig(
         project_dir=project_dir,
-        build_dir=build_dir,
         slang_src_path=project_dir / "slang",
         shader_dst_path=project_dir / "shader",
         generated_dir=generated_dir,
