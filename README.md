@@ -1,272 +1,50 @@
-# VkSplat
+# nlrc-vksplat
 
-[![Website](https://img.shields.io/website?url=https://harry7557558.github.io/vksplat/&logo=github)](https://harry7557558.github.io/vksplat/)
-[![arXiv](https://img.shields.io/badge/arXiv-2605.00219-b31b1b.svg)](https://arxiv.org/abs/2605.00219)
-![License](https://img.shields.io/github/license/harry7557558/vksplat)
+Monorepo for VkSplat-based 3D Gaussian Splatting training research. The repository keeps a frozen reference implementation alongside a new rewrite.
 
-This project provides functionality for training 3D Gaussian Splatting (3DGS) models, using Vulkan compute backend with Python bindings and a C++ trainer executable.
+## Layout
 
-This is code for paper "VkSplat: High-Performance 3DGS Training in Vulkan Compute".
+| Path | Purpose |
+|------|---------|
+| [`ref/`](ref/) | Reference VkSplat copy (mostly readonly; critical bugfixes only) |
+| [`ref/vksplat/`](ref/vksplat/) | CMake/Python project root for the reference build |
+| [`ref/docs/`](ref/docs/) | Reference architecture and porting notes |
+| `next/nlrc_vksplat/` | New implementation (Phase 2 — not yet scaffolded) |
+| `outputs/` | Training runs and buffer dumps (gitignored) |
 
-Features:
-- Cross vendor 3DGS training (tested with NVIDIA, AMD, Intel®)
-- High performance (over 3.3x faster training compared to GSplat)
-- Memory efficiency (9 million SH3 Gaussians in 8GB VRAM for garden scene with MCMC)
-- Quality matching baseline (identical PSNR, SSIM, LPIPS compared to GSplat)
-- Default (original ADC from Inria) and MCMC densification
-- Support for non-centered and distorted/fisheye cameras
+Reference baseline tag: **`ref-baseline-2026-06-12`**
 
+## Quick start (reference)
 
-## Prerequisites
-
-### System Requirements
-- Vulkan SDK installed
-- Python 3.7+
-- Python3 dependencies for building pybind11 C++ extension AND/OR CMake 3.28+ (see "Installation" section below)
-- C++17 compatible compiler
-
-#### Tested with
-- Vulkan 1.3 and 1.4
-- Windows 10/11, Ubuntu 22.04/24.04/25.04
-- NVIDIA RTX 3090, NVIDIA RTX 4080 Super, NVIDIA RTX 5070 Laptop, AMD Radeon RX 7800 XT, Intel® UHD Graphics 750, Intel® UHD Graphics 770
-
-We also received feedback from users who successfully ran VkSplat on Mac devices using MoltenVK.
-
-## Installation
-
-GLM 1.0.3, CLI11 2.4.2, and nlohmann_json 3.11.3 are vendored as local archives under `vksplat/contrib/` for offline CMake builds. CMake uses those archives through FetchContent; pip may also extract GLM headers to `vksplat/contrib/glm/` (gitignored).
-
-### Method 1: Using pip
-
-This is the recommended option if you are trying the method and want to see it working quickly/reliably.
-This assumes you already have necessary dependencies to build a Pybind11 extension (setuptools, pybind11, etc.).
+Build the C++ trainer:
 
 ```bash
-cd /path/to/vksplat
-pip install -e . --no-build-isolation  # optionally with -v
-```
-
-Import from Python:
-
-```py
-import vksplat
-```
-
-This should work anywhere in your Python environment. Be careful with folders with the same name as `vksplat` as they may take precedence during imports.
-
-### Method 2: Using CMake
-
-This is the recommended option for development.
-
-Linux:
-
-```bash
-cd /path/to/vksplat
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..  # or Debug
-make -j
-```
-
-Windows:
-
-```bash
-cd /path/to/vksplat
-cmake -B build
-cmake --build build --config Release  # or Debug
-```
-
-#### CMake Presets (recommended)
-
-From `vksplat/`, use Ninja single-config presets:
-
-```bash
-cd /path/to/vksplat
-cmake --preset release
-cmake --build --preset release
-```
-
-Debug build: replace `release` with `debug`. On Windows, run from a Visual Studio Developer shell so Ninja can find MSVC.
-
-The CMake build also produces the C++ trainer executable when `VKSPLAT_BUILD_APPS=ON`:
-
-```bash
-cmake --build --preset release --target vksplat_train
-```
-
-Optional shader/device compatibility flags:
-
-```bash
-cmake --preset release -DVKSPLAT_EMULATE_INT64=ON -DVKSPLAT_EMULATE_F32_ATOMIC=ON
-cmake --build --preset release
-cmake --build build/release --target vksplat_compile_shaders
-```
-
-OpenHarmony cross-compile (requires `OHOS_SDK_NATIVE` pointing at the SDK `native` directory):
-
-```bash
-export OHOS_SDK_NATIVE=/path/to/native
-cmake --preset ohos-release
-cmake --build --preset ohos-release
-```
-
-Copy `CMakeUserPresets.json.example` to `CMakeUserPresets.json` to pin a local SDK path without exporting it in the shell.
-
-Import from Python (from `vksplat` folder):
-```py
-from build import vksplat  # or build.Debug, build.Release for MSVC
-```
-
-Make sure relevant Python dependencies (`numpy`, `opencv-python`, `tqdm`) are installed when running `simple_trainer.py`.
-Optionally, install `torchmetrics[image]>=1.0.1` if you want to run evaluation.
-
-Be careful if you have a package with the same name as `build`, as it may take precedence during imports.
-
-## Quick Start
-
-See `simple_trainer.py` for an example. It trains a 3DGS model using Vulkan, saves results to file, prints time and VRAM breakdown, and computes evaluation metrics using torchmetrics library. A CUDA-compatible GPU is not required for evaluation. It also provides a function to run benchmark across Mip-NeRF 360 dataset.
-
-Before running `simple_trainer.py`, make the following edits if needed:
-- Near the beginning of the file, set `TRAIN_DEVICE` to the device you want to use
-- In `train` function, choose the way your import `vksplat` based on how you installed it
-- Adjust parameters in `TrainerConfig` and `MCMCTrainerConfig` classes, particularly `output_dir`, `dataset_dir`, `image_dir`, and `cap_max` if you are using MCMC
-- Inside the `__name__ == "__main__"` block at the end of file, choose whether you want to train default, train MCMC, or run batch evaluation.
-- If you are running batch evaluation, adjust code in `benchmark_mipnerf360` function if needed.
-- If you want to use an in-browser viewer (similar to the one used by GSplat) during training, set `enable_viewer` in trainer config to `True`.
-
-Running the code should create a work folder. After training, you may find training time and memory in `train.json`, metrics in `eval.json`, saved PLY file in `splat.ply`, as well as validation renders.
-
-### C++ trainer executable
-
-The C++ executable runs the core training flow without importing Python. It writes `config.json`, `train.json`, `splat.ply`, and validation render PNGs by default. Torchmetrics evaluation and the Python viewer are still Python-only.
-
-```bash
-cd /path/to/vksplat
+cd ref/vksplat
 cmake --preset release
 cmake --build --preset release --target vksplat_train
-./build/release/apps/trainer/vksplat_train \
-  --dataset-dir /path/to/colmap-scene \
-  --output-dir /path/to/outputs \
-  --image-dir images_4 \
-  --sparse-dir sparse/0 \
-  --strategy mcmc
 ```
 
-Use `vksplat_train --help` for all CLI11 options, including optimizer and densification overrides. Use `--shader-dir` if the executable is run away from the source-tree shader directory.
-
-If your device lacks shader int64 or float32 atomic add support, build C++ and shaders with matching emulation flags instead of editing shader files by hand. For CMake, configure with `-DVKSPLAT_EMULATE_INT64=ON` and/or `-DVKSPLAT_EMULATE_F32_ATOMIC=ON`, then recompile shaders. For direct shader compilation, pass `--emulate-int64 1` and/or `--emulate-f32-atomic 1` to `compile_shaders.py`.
-
-#### Vulkan buffer dumps (C++ trainer only)
-
-Buffer dumping is an optional compile-time feature for capturing GPU buffer snapshots at named training checkpoints. It is intended for golden-reference debugging and regression comparison, not for normal training runs.
-
-**Build with dump support enabled** (`VKSPLAT_ENABLE_BUFFER_DUMPS` defaults to `OFF`):
+Recompile shaders:
 
 ```bash
-cd /path/to/vksplat
-cmake --preset release -DVKSPLAT_ENABLE_BUFFER_DUMPS=ON
-cmake --build --preset release --target vksplat_train
+cd ref
+python compile_shaders.py
 ```
 
-On Windows you can keep a separate dump-enabled preset in local `CMakeUserPresets.json` (gitignored) that inherits `release` and sets `VKSPLAT_ENABLE_BUFFER_DUMPS=ON`, for example into `build/release-dumps/`.
-
-**Run the trainer with dumps:**
+Install the Python package (editable):
 
 ```bash
-./build/release/apps/trainer/vksplat_train \
-  --dataset-dir /path/to/colmap-scene \
-  --output-dir /path/to/outputs \
-  --image-dir images_4 \
-  --sparse-dir sparse/0 \
-  --dump-buffers \
-  --train-steps 1 \
-  --no-val-renders
+cd ref/vksplat
+pip install -e . --no-build-isolation
 ```
 
-Dump-related CLI flags:
+## Documentation
 
-- `--dump-buffers` — enable checkpoint dumps (required for all other dump flags)
-- `--dump-dir PATH` — output root; defaults to `<work_dir>/buffer_dumps`
-- `--dump-all-buffers` — also dump scratch buffers, not just the default golden-reference set
-- `--dump-capacity` — write sibling `.capacity.vkbd` files sized to each buffer allocation
-- `--dump-seed N` — fixed shuffle seed for reproducible step ordering (default `42`)
+- [Reference README](ref/README.md) — full VkSplat install, training, and development guide
+- [Shader pipeline](ref/docs/shader-pipeline.md) — GPU compute stages and buffer layout
+- [OHOS porting report](ref/docs/ohos-maleoon910-porting-report.md) — OpenHarmony / Maleoon notes
 
-**Output layout:** under the dump root you get a top-level `manifest.json`, an `init/after_dataset_load/` checkpoint, and per-step trees such as `step_000000/00_step_start/`, `01_projection_forward/`, `02_process_tiles/after_sort/`, `03_rasterize_forward/`, `04_loss/...`, `05_backward/...`, and `06_post_backward/...`. Each checkpoint directory contains a `manifest.json` and one `.vkbd` file per dumped buffer.
+## Policy
 
-**Inspect and compare dumps** with `vksplat/scripts/vkbd_tool.py` (requires `numpy`):
-
-```bash
-python vksplat/scripts/vkbd_tool.py inspect outputs/<run>/buffer_dumps/step_000000/00_step_start/xyz_ws.vkbd --array
-python vksplat/scripts/vkbd_tool.py compare expected/buffer_dumps actual/buffer_dumps
-```
-
-If dump flags are passed to a build without `VKSPLAT_ENABLE_BUFFER_DUMPS=ON`, `vksplat_train` exits with an error asking you to rebuild with that option.
-
-
-## Development
-
-Slang code in `vksplat/slang/`.
-
-Compiled shaders in `vksplat/shader/generated`:
-- SPIR-V binaries (`.spv`) are loaded by program at run time (see `simple_trainer.py`)
-- Tested with `slang-2026.2.1-linux-x86_64`, other versions may also work
-
-Vulkan/C++ code in `vksplat/src/`:
-- `buffer`: Refactored buffers relevant for 3DGS training
-- `gs_pipeline`: Vulkan abstraction
-- `gs_renderer`: Rendering functionality, inherited from `gs_pipeline`
-- `gs_trainer`: Training functionality, inherited from `gs_renderer`
-
-See [docs/shader-pipeline.md](docs/shader-pipeline.md) for the GPU compute pipeline, buffer I/O, and stage diagrams.
-
-
-### Recompile shaders
-
-VkSplat shader/C++ propagation constants are owned by `vksplat/src/vksplat_config.h`. `compile_shaders.py` regenerates `vksplat/slang/config_generated.slang`, `vksplat/shader/radix_sort/config_generated.glsl`, and `vksplat/shader/generated/shader_config.json` before compiling.
-
-To recompile shaders after update, run `python3 compile_shaders.py` from project root directory.
-
-To force recompile all shaders without caching, use `python3 compile_shaders.py --force`.
-
-To generate only the config fragments, run `python3 vksplat/scripts/generate_shader_config.py`. To verify generated fragments are current, run `python3 vksplat/scripts/generate_shader_config.py --check`.
-
-CMake users can run `cmake --build build/release --target vksplat_compile_shaders` after configuring. This target is optional and requires a Python interpreter plus `slangc`/`glslc`.
-
-If you add new shader source files or new propagated config knobs, update `compile_shaders.py` and `vksplat/scripts/generate_shader_config.py`.
-
-
-### Recompile Vulkan/C++ code
-
-#### For pip:
-```bash
-cd /path/to/vksplat
-python -m pip install -e . --no-build-isolation -v
-```
-In some cases, you may need to delete the `build` folder before running the command to clear the cache.
-
-#### For CMake:
-```bash
-cd /path/to/vksplat
-make -j
-```
-
-If you add new source files, you must add them to the list of sources in `setup.py` and `CMakeLists.txt` before running the recompilation commands.
-
-
-
-## Citation
-
-If you find this work useful for your research, please consider citing:
-
-```bibtex
-@inproceedings{chen2026vksplat,
-  booktitle = {Eurographics 2026 - Short Papers},
-  title     = {{VkSplat: High-Performance 3DGS Training in Vulkan Compute}},
-  author    = {Chen, Jingxiang and Ibrahim, Mohamed and Liu, Yang},
-  year      = {2026},
-  publisher = {The Eurographics Association},
-  ISSN      = {2309-5059},
-  ISBN      = {978-3-03868-299-8},
-  DOI       = {10.2312/egs.20261024}
-}
-```
+- **`ref/`**: regression baseline and golden buffer dumps; avoid feature work here
+- **`next/nlrc_vksplat/`**: all new architecture and implementation (coming in Phase 2)

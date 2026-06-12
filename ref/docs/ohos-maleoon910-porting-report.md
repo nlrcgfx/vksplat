@@ -45,15 +45,15 @@ Recommended first porting profile:
 
 ### Existing useful groundwork
 
-- `vksplat/CMakePresets.json` already has `ohos-debug` and `ohos-release`
+- `../vksplat/CMakePresets.json` already has `ohos-debug` and `ohos-release`
   presets. The OHOS base preset uses the OHOS native CMake toolchain, targets
   `arm64-v8a`, uses `c++_shared`, and sets `VKSPLAT_BUILD_PYTHON=OFF`.
-- `vksplat/CMakeLists.txt` already exposes `VKSPLAT_EMULATE_INT64` and
+- `../vksplat/CMakeLists.txt` already exposes `VKSPLAT_EMULATE_INT64` and
   `VKSPLAT_EMULATE_F32_ATOMIC`, passes matching C++ definitions, and forwards
   those values to shader config generation.
-- `vksplat/scripts/generate_shader_config.py` generates consistent Slang,
-  GLSL, and JSON fragments from `vksplat/src/vksplat_config.h`.
-- `vksplat/src/gs_renderer.cpp` validates `shader_config.json` against the
+- `../vksplat/scripts/generate_shader_config.py` generates consistent Slang,
+  GLSL, and JSON fragments from `../vksplat/src/vksplat_config.h`.
+- `../vksplat/src/gs_renderer.cpp` validates `shader_config.json` against the
   compiled C++ constants at runtime, which is useful for preventing mixed
   host/shader profiles.
 
@@ -61,7 +61,7 @@ Recommended first porting profile:
 
 The default configuration is not Maleoon-ready:
 
-- `VKSPLAT_SUBGROUP_SIZE` defaults to 32 in `vksplat/src/vksplat_config.h`.
+- `VKSPLAT_SUBGROUP_SIZE` defaults to 32 in `../vksplat/src/vksplat_config.h`.
 - `VKSPLAT_CUMSUM_BLOCK_SIZE`, `VKSPLAT_SUM_BLOCK_SIZE`, and
   `VKSPLAT_MORTON_APPLY_THREADS` are 1024.
 - `VKSPLAT_MORTON_STATS_THREADS` is `VKSPLAT_SUBGROUP_SIZE *

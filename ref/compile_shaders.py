@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Shader compiler for VkSplat.
+Shader compiler for VkSplat (reference copy).
+
+Run from the ref/ directory:
+
+    python compile_shaders.py
 """
 
 import os

@@ -1,16 +1,16 @@
 # VkSplat GPU Shader Pipeline
 
-VkSplat trains 3D Gaussian Splatting (3DGS) entirely on the GPU. Slang and GLSL compute shaders are compiled offline to SPIR-V (`vksplat/shader/generated/*.spv`) and loaded at runtime. Python drives training through the `vksplat.VkSplat` binding; all dispatches go through C++ (`VulkanGSPipeline::executeCompute`).
+VkSplat trains 3D Gaussian Splatting (3DGS) entirely on the GPU. Slang and GLSL compute shaders are compiled offline to SPIR-V (`../vksplat/shader/generated/*.spv`) and loaded at runtime. Python drives training through the `vksplat.VkSplat` binding; all dispatches go through C++ (`VulkanGSPipeline::executeCompute`).
 
 **Class hierarchy:** `VulkanGSPipeline` → `VulkanGSRenderer` → `VulkanGSTrainer`
 
 | Layer | File | Role |
 |-------|------|------|
-| Session/API | `vksplat/src/training_session.cpp`, `vksplat/src/python_bindings.cpp` | `train_step`, `forward`, per-stage debug entry points |
-| Renderer | `vksplat/src/gs_renderer.cpp` | Projection, tile sort, rasterize |
-| Trainer | `vksplat/src/gs_trainer.cpp` | SSIM loss, optimizer, densification, Morton reorder |
-| Buffers | `vksplat/src/buffer.h` | `VulkanGSPipelineBuffers` layout |
-| Shader sources | `vksplat/slang/*.slang`, `vksplat/shader/radix_sort/*.comp` | Authoritative kernel logic |
+| Session/API | `../vksplat/src/training_session.cpp`, `../vksplat/src/python_bindings.cpp` | `train_step`, `forward`, per-stage debug entry points |
+| Renderer | `../vksplat/src/gs_renderer.cpp` | Projection, tile sort, rasterize |
+| Trainer | `../vksplat/src/gs_trainer.cpp` | SSIM loss, optimizer, densification, Morton reorder |
+| Buffers | `../vksplat/src/buffer.h` | `VulkanGSPipelineBuffers` layout |
+| Shader sources | `../vksplat/slang/*.slang`, `../vksplat/shader/radix_sort/*.comp` | Authoritative kernel logic |
 
 ---
 
@@ -22,7 +22,7 @@ Every kernel is a Vulkan compute shader with:
 - **Push constants:** uniforms (camera, step, learning rates, image size, etc.). Max 192 bytes.
 - **No textures** — all data lives in storage buffers.
 
-Tile size is 16×16 (`TILE_WIDTH` / `TILE_HEIGHT` in `vksplat/slang/config.slang`).
+Tile size is 16×16 (`TILE_WIDTH` / `TILE_HEIGHT` in `../vksplat/slang/config.slang`).
 
 ---
 
@@ -221,7 +221,7 @@ Emits `(tile_id << depth_bits) | depth_bits` sort keys and splat indices for eac
 | | |
 |---|---|
 | **SPIR-V** | `radix_sort/upsweep`, `radix_sort/spine`, `radix_sort/downsweep` |
-| **Source** | `vksplat/shader/radix_sort/*.comp` (GLSL) |
+| **Source** | `../vksplat/shader/radix_sort/*.comp` (GLSL) |
 | **C++** | `VulkanGSRenderer::executeSort` |
 | **Push constants** | `{ pass, elementCount }` per 8-bit digit |
 
@@ -722,15 +722,15 @@ Instrumented stage names in `perf_timer.h` (`PERF_TIMER_TRAIN_STAGES`) map 1:1 t
 
 ## Configuration Propagation
 
-Propagated shader/C++ constants are centralized in `vksplat/src/vksplat_config.h`. Do not hand-edit duplicated values in Slang, GLSL, or C++ dispatch code.
+Propagated shader/C++ constants are centralized in `../vksplat/src/vksplat_config.h`. Do not hand-edit duplicated values in Slang, GLSL, or C++ dispatch code.
 
 The generated shader fragments are:
 
-- `vksplat/slang/config_generated.slang`
-- `vksplat/shader/radix_sort/config_generated.glsl`
-- `vksplat/shader/generated/shader_config.json`
+- `../vksplat/slang/config_generated.slang`
+- `../vksplat/shader/radix_sort/config_generated.glsl`
+- `../vksplat/shader/generated/shader_config.json`
 
-Run `python compile_shaders.py` from the repository root to regenerate config fragments and compile shaders. Run `python vksplat/scripts/generate_shader_config.py --check` in CI or before release to verify generated config is current.
+Run `python compile_shaders.py` from the `ref/` directory to regenerate config fragments and compile shaders. Run `python ../vksplat/scripts/generate_shader_config.py --check` in CI or before release to verify generated config is current.
 
 CMake exposes matching C++/shader emulation options:
 
@@ -747,11 +747,11 @@ Runtime initialization reads `shader_config.json` when present and fails if gene
 
 When adding or changing shaders:
 
-1. Add Slang/GLSL source under `vksplat/slang/` or `vksplat/shader/radix_sort/`.
+1. Add Slang/GLSL source under `../vksplat/slang/` or `../vksplat/shader/radix_sort/`.
 2. Register the job in `compile_shaders.py` (`_create_shader_jobs`).
-3. Add the SPIR-V name to `VkSplatTrainingSession::initialize` in `vksplat/src/training_session.cpp`.
+3. Add the SPIR-V name to `VkSplatTrainingSession::initialize` in `../vksplat/src/training_session.cpp`.
 4. Wire `createComputePipeline` and `executeCompute` in `gs_renderer.cpp` or `gs_trainer.cpp`.
 5. Recompile: `python compile_shaders.py` (use `--force` to bypass cache).
 6. Update this document: relevant subgraph section + shader index appendix.
 
-For device-specific behavior (emulated int64, emulated f32 atomics), change `vksplat/src/vksplat_config.h` defaults or configure CMake with the matching `VKSPLAT_EMULATE_*` options, then regenerate and recompile shaders.
+For device-specific behavior (emulated int64, emulated f32 atomics), change `../vksplat/src/vksplat_config.h` defaults or configure CMake with the matching `VKSPLAT_EMULATE_*` options, then regenerate and recompile shaders.
