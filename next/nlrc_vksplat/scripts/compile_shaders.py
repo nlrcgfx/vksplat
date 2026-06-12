@@ -140,6 +140,12 @@ class ShaderCompiler:
             ShaderSource(source="sum.slang", language="slang", jobs=[ShaderJob("sum", {})], deps=["config.slang"]),
             ShaderSource(source="where.slang", language="slang", jobs=[ShaderJob("where", {})], deps=["config.slang"]),
             ShaderSource(
+                source="vertex_shader.slang",
+                language="slang",
+                jobs=[ShaderJob("projection_forward", {"EXPORT_MODE": 0})],
+                deps=["config.slang", "utils.slang", "spherical_harmonics.slang"],
+            ),
+            ShaderSource(
                 source="radix_sort/upsweep.comp",
                 language="glsl",
                 jobs=[ShaderJob("radix_sort_upsweep", {})],

@@ -11,7 +11,7 @@ current test surface, and where future hardening should focus.
 | Test binary | `nlrc_vksplat_tests` (Catch2 + CTest) |
 | Host tests | `[host]` cases; reliable baseline on normal dev machines |
 | GPU tests | `[gpu]` cases; controlled by `NLRC_VKSPLAT_GPU_TESTS` (`AUTO`, `REQUIRE`, `OFF`) |
-| Covered dispatches | Smoke compute wrapper; Subgraph D utilities: cumsum, sum, where; isolated 32-bit radix sort |
+| Covered dispatches | Smoke compute wrapper; Subgraph D utilities: cumsum, sum, where; isolated 32-bit radix sort; isolated Subgraph A `projection_forward` |
 | Fixture source | [`test_data/generate_fixtures.py`](../../../test_data/generate_fixtures.py) |
 | Per-fixture values | [`test_data/README.md`](../../../test_data/README.md) fixture catalog |
 
@@ -54,6 +54,7 @@ Paths below use PowerShell from the repo root.
 |------|---------|
 | Full Windows build and tests | `powershell -ExecutionPolicy Bypass -File next\nlrc_vksplat\scripts\build-windows.ps1 -Preset windows-debug -RunTests` |
 | Configure, build, and CTest | `cmake --preset windows-debug`, `cmake --build --preset windows-debug`, `ctest --preset windows-debug --output-on-failure` (from `next/nlrc_vksplat`) |
+| Windows emulated-int64 workflow | Copy `next/nlrc_vksplat/CMakeUserPresets.json.example` to `CMakeUserPresets.json`, then `cmake --workflow --preset windows-debug-emulated-int64` from `next/nlrc_vksplat` (or `build-windows.ps1 -Preset windows-debug-emulated-int64 -RunTests`) |
 | Fixture drift check | `python test_data\generate_fixtures.py --check` |
 
 Primary Windows workflow:
@@ -83,6 +84,7 @@ use `scripts/build-windows.ps1 -PythonExe <path>` or configure CMake with
 | Compute wrapper | `[gpu]` | Basic Vulkan compute wrapper validation | `test_gpu_smoke.cpp` | Embedded smoke shader dispatch; invalid SPIR-V; invalid push constant size; descriptor count, null binding, and unbound descriptor rejection. |
 | Utility shaders | `[gpu]` | Isolated Subgraph D utility dispatches | `test_utility_shaders.cpp`, generated fixture data | `cumsum_single_pass`, multi-phase cumsum, `sum`, and `where` match synthetic goldens; see [fixture catalog](#fixture-catalog) below. |
 | Radix sort | `[gpu]` | Isolated 32-bit sort pipeline | `test_radix_sort.cpp`, generated fixture data | Four 8-bit passes dispatch `radix_sort/upsweep`, `radix_sort/spine`, and `radix_sort/downsweep`; output keys match CPU stable-sort goldens, indices remain a permutation, and duplicate-key order is stable. |
+| Projection forward | `[gpu]` | Isolated first Subgraph A dispatch | `test_projection_forward.cpp`, generated fixture data | `projection_forward` dispatches one synthetic visible splat and asserts finite, bounded screen-space outputs, positive depth/radius/tile touch count, and valid native or emulated `rect_tile_space` bounds. |
 
 ## Fixture and golden data coverage
 
@@ -116,6 +118,14 @@ The Python fixture generator mirrors shader sizing constants from
 | `RADIX_WORKGROUP_SIZE` | `VKSPLAT_RADIX_WORKGROUP_SIZE` | 512 |
 | `RADIX_PARTITION_DIVISION` | `VKSPLAT_RADIX_PARTITION_DIVISION` | 8 |
 | `RADIX_PARTITION_SIZE` | `VKSPLAT_RADIX_PARTITION_SIZE` | 4096 |
+
+#### Projection mirrors
+
+| Python constant (`generate_fixtures.py`) | C++/shader constant (`nlrc_vksplat_config.hpp`) | Value |
+|------------------------------------------|-------------------------------------------------|-------|
+| `SH_REORDER_SIZE` | `VKSPLAT_SH_REORDER_SIZE` | 32 |
+| fixture image size | test-local `VulkanGSRendererUniforms` | 32x32 |
+| fixture tile grid | `TILE_WIDTH = TILE_HEIGHT = 16` | 2x2 |
 
 #### Boundary input sizes
 
@@ -152,6 +162,8 @@ constants above.
 | `radix_sort_duplicates` | radix sort | `[gpu]` | 12 | Duplicate-key stable ordering |
 | `radix_sort_sorted` | radix sort | `[gpu]` | 64 | Already-sorted input regression guard |
 | `radix_sort_reverse` | radix sort | `[gpu]` | 64 | Reverse-sorted input regression guard |
+| `projection_forward_native_int64` | projection | `[gpu]` | `N=1` | Native-`int64` `rect_tile_space` layout and invariant-only projection output checks |
+| `projection_forward_emulated_int64` | projection | `[gpu]` | `N=1` | Emulated-`int64` `rect_tile_space` layout and invariant-only projection output checks |
 
 Fixture and golden directories are nested by kernel or pipeline family
 (`fixtures/cumsum/single_pass/`, `fixtures/sum/basic/`, `fixtures/radix_sort/single_partition/`, etc.).
@@ -192,7 +204,9 @@ Host tests are the reliable baseline. GPU tests are controlled by
 GPU tests validate correctness for small deterministic utility shader cases, not
 cross-device numerical stability, performance, or full rendering/training behavior.
 Radix sort GPU tests are isolated 32-bit integer checks; they do not wire sorted
-keys into Subgraph A or G.
+keys into Subgraph A or G. Projection tests select the fixture whose
+`emulate_int64` field matches the active build profile and use invariant checks,
+not reference dump parity.
 
 ## Not covered
 
@@ -205,11 +219,13 @@ Status meanings: **Future plan** = planned work; **Blocked** = external dependen
 |------|-------|
 | Full training pipeline parity with `ref/` | Suite targets infrastructure and isolated utility shaders, not full model training. Add curated reference parity fixtures after stable buffer dump contracts exist. |
 | Renderer/image-quality regression tests | No rewrite renderer output oracle or image comparison harness. Define small scene fixtures, output format, and tolerated metrics first. |
+| `projection_forward` ref parity | The first projection fixture is synthetic and invariant-only. Add curated ref-derived buffers after dump provenance and tolerances are documented. |
+| `forward()` wiring | `projection_forward` is not wired into a renderer/subgraph wrapper yet. Per porting order, wait for `generate_keys`, `compute_tile_ranges`, and `rasterize_forward` isolated tests. |
 | Radix sort integration with Subgraph A/G | Isolated radix sort is covered, but `generate_keys`, `compute_tile_ranges`, rasterization, and Morton sort producers/consumers are not wired through it yet. Wire integration only after the relevant subgraph stages pass isolated tests. |
 | Radix sort zero-element no-op | Current fixture schema and `StorageBuffer` require non-empty buffers, and the ref pipeline skips sort when `num_indices == 0`. Add this as a wrapper/subgraph no-op test when Subgraph A/G wiring exists. |
 | Radix sort 64-bit key path | Current rewrite config uses `VKSPLAT_SORTING_KEY_BITS = 32`. Add 64-bit fixtures and shader-profile validation only if the rewrite enables 64-bit sorting keys. |
 | Radix sort large spine-loop path | Current fixtures cover `num_parts = 1` and `num_parts = 2`, not `num_parts > VKSPLAT_RADIX_WORKGROUP_SIZE`. Add a generated-at-test-time or slow fixture if that path becomes important. |
-| Remaining rewrite shader stages | Smoke, Subgraph D utilities, and isolated radix sort are covered. Add one synthetic invariant fixture per new stage before ref-parity fixtures. |
+| Remaining rewrite shader stages | Smoke, Subgraph D utilities, isolated radix sort, and isolated `projection_forward` are covered. Add one synthetic invariant fixture per new stage before ref-parity fixtures. |
 | Memory lifetime, stress, and fault injection | Wrapper tests cover argument validation only. Add opt-in stress tests once resource limits and failure modes are defined. |
 | Reference-derived binary conversion tool coverage | `vkbd_to_bins.py` is not covered by automated tests. Add synthetic `.vkbd` samples or parser unit tests before parity ingestion. |
 

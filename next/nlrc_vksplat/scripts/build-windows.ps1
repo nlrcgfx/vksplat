@@ -1,5 +1,10 @@
 param(
-  [ValidateSet("windows-debug", "windows-release")]
+  [ValidateSet(
+    "windows-debug",
+    "windows-release",
+    "windows-debug-emulated-int64",
+    "windows-release-emulated-int64"
+  )]
   [string]$Preset = "windows-debug",
 
   [ValidateSet("x64", "arm64")]

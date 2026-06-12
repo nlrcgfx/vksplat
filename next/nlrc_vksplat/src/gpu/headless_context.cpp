@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "gpu/constants.hpp"
+#include "nlrc_vksplat_config.hpp"
 #include "vulkan_check.hpp"
 
 namespace nlrc::vksplat::gpu {
@@ -24,6 +25,19 @@ namespace {
   }
 
   return false;
+}
+
+[[nodiscard]] bool has_required_device_features(VkPhysicalDevice physical_device) {
+  VkPhysicalDeviceFeatures features{};
+  vkGetPhysicalDeviceFeatures(physical_device, &features);
+
+  if constexpr (kShaderRequiresInt64) {
+    if (features.shaderInt64 == VK_FALSE) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 [[nodiscard]] int device_score(VkPhysicalDevice physical_device) {
@@ -59,6 +73,9 @@ namespace {
 
   for (VkPhysicalDevice device : devices) {
     if (!has_compute_queue(device, family)) {
+      continue;
+    }
+    if (!has_required_device_features(device)) {
       continue;
     }
 
@@ -133,6 +150,12 @@ HeadlessContext::HeadlessContext() {
   device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   device_info.queueCreateInfoCount = kQueueCount;
   device_info.pQueueCreateInfos = &queue_info;
+
+  VkPhysicalDeviceFeatures enabled_features{};
+  if constexpr (kShaderRequiresInt64) {
+    enabled_features.shaderInt64 = VK_TRUE;
+  }
+  device_info.pEnabledFeatures = &enabled_features;
 
   check_vk(vkCreateDevice(physical_device_, &device_info, nullptr, &device_), "vkCreateDevice");
   vkGetDeviceQueue(device_, compute_queue_family_, kQueueIndex, &compute_queue_);

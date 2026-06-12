@@ -51,6 +51,7 @@ TEST_CASE("Load harness_smoke fixture manifest metadata", "[host]") {
   const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(root / "manifest.json");
   REQUIRE(manifest.stage_name == "harness_smoke");
   REQUIRE(manifest.bindings.empty());
+  REQUIRE(manifest.profile_agnostic);
 }
 
 TEST_CASE("Load harness_smoke fixture typed buffer spec", "[host]") {
@@ -130,6 +131,24 @@ TEST_CASE("Typed fixture loader preserves little-endian int32 values", "[host]")
 TEST_CASE("Fixture manifest loader rejects malformed JSON", "[host]") {
   const auto manifest_file = write_temp_manifest("{not json");
   REQUIRE_THROWS(nlrc::vksplat::tests::load_fixture_manifest(manifest_file.path));
+}
+
+TEST_CASE("Fixture manifest loader defaults profile_agnostic to false", "[host]") {
+  const auto manifest_file = write_temp_manifest(R"({
+    "ref_baseline_tag": "ref-baseline-2026-06-12",
+    "stage_name": "profile_default",
+    "subgraph": "test",
+    "bindings": [],
+    "buffers": {},
+    "shapes": {},
+    "dtypes": {},
+    "cmake_preset": "windows-debug",
+    "emulate_int64": 0,
+    "emulate_f32_atomic": 0
+  })");
+
+  const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(manifest_file.path);
+  REQUIRE_FALSE(manifest.profile_agnostic);
 }
 
 TEST_CASE("Fixture manifest loader rejects invalid dtype and shape metadata", "[host]") {

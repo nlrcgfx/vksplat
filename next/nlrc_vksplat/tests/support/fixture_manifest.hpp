@@ -34,6 +34,7 @@ struct FixtureManifest {
   std::string cmake_preset;
   int emulate_int64{0};
   int emulate_f32_atomic{0};
+  bool profile_agnostic{false};
   std::string notes;
   std::string vkbd_source;
 };

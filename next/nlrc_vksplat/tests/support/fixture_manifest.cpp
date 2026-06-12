@@ -87,6 +87,7 @@ FixtureManifest load_fixture_manifest(const std::filesystem::path &manifest_path
   manifest.cmake_preset = json.at("cmake_preset").get<std::string>();
   manifest.emulate_int64 = json.at("emulate_int64").get<int>();
   manifest.emulate_f32_atomic = json.at("emulate_f32_atomic").get<int>();
+  manifest.profile_agnostic = json.value("profile_agnostic", false);
   manifest.notes = json.value("notes", "");
 
   const auto buffer_files = json.at("buffers").get<std::map<std::string, std::string>>();

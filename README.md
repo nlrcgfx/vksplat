@@ -34,6 +34,29 @@ ctest --preset windows-debug
 
 CMake profile options are limited to build-profile toggles: `NLRC_VKSPLAT_EMULATE_INT64` and `NLRC_VKSPLAT_EMULATE_F32_ATOMIC`. CMake propagates these to C++ compile definitions and generated shader config (`shader_config.json` / `config_generated.*`); OHOS presets enable emulated int64 by default. Numeric shader constants such as tile sizes, subgroup sizes, and tensor tables live in `src/nlrc_vksplat_config.hpp`, not CMake options. See `.cursor/rules/shader-build-embed.mdc`.
 
+### Windows emulated int64 (local user presets)
+
+Shared presets (`windows-debug`, `windows-release`) keep native int64 off by default. To build and test OHOS-parity paths on Windows (for example `projection_forward_emulated_int64`), copy the local user preset template once:
+
+```powershell
+cd next/nlrc_vksplat
+Copy-Item CMakeUserPresets.json.example CMakeUserPresets.json
+```
+
+Then configure, build, and test in an isolated tree under `build/windows-debug-emulated-int64/`:
+
+```powershell
+cmake --workflow --preset windows-debug-emulated-int64
+```
+
+Or use the Windows wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -Preset windows-debug-emulated-int64 -RunTests
+```
+
+`CMakeUserPresets.json` is gitignored; commit only `CMakeUserPresets.json.example`.
+
 **VS Code / Cursor:** open the repo root, install the recommended extensions when prompted, then run **CMake: Configure** (or `cmake --preset windows-debug`) so `build/compile_commands.json` is available for clangd. Use a Developer PowerShell terminal when building with MSVC.
 
 **C++ lint:** builds do not run lint. Install pre-commit and run the full-tree hooks before committing:

@@ -9,7 +9,6 @@
 
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
-#include "manifest_profile.hpp"
 
 namespace {
 
@@ -41,7 +40,8 @@ void validate_manifest_file(const std::filesystem::path &manifest_path) {
   REQUIRE_FALSE(manifest.cmake_preset.empty());
   REQUIRE_FALSE(manifest.notes.empty());
 
-  REQUIRE(nlrc::vksplat::tests::manifest_matches_build_profile(manifest));
+  REQUIRE((manifest.emulate_int64 == 0 || manifest.emulate_int64 == 1));
+  REQUIRE((manifest.emulate_f32_atomic == 0 || manifest.emulate_f32_atomic == 1));
 
   for (const auto &binding : manifest.bindings) {
     INFO("binding: " << binding);

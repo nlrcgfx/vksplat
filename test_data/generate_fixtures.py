@@ -19,6 +19,7 @@ DEFAULT_CMAKE_PRESET = "windows-debug"
 CUMSUM_BLOCK_SIZE = 512
 SUM_BLOCK_SIZE = 512
 WHERE_BLOCK_SIZE = 256
+SH_REORDER_SIZE = 32
 SORTING_KEY_BITS = 32
 RADIX_SORT_RADIX = 256
 RADIX_WORKGROUP_SIZE = 512
@@ -60,6 +61,9 @@ class FixtureCase:
     golden_buffers: tuple[BufferData, ...]
     fixture_notes: str
     golden_notes: str
+    emulate_int64: int = 0
+    profile_agnostic: bool = True
+    uniforms: dict[str, int | float | list[float]] | None = None
 
 
 def element_count(shape: Iterable[int]) -> int:
@@ -121,6 +125,11 @@ def stage_relpath(stage_name: str, subgraph: str) -> Path:
         if stage_name.startswith("radix_sort_"):
             return Path("radix_sort") / stage_name.removeprefix("radix_sort_")
         raise ValueError(f"unsupported radix sort stage: {stage_name}")
+
+    if subgraph == "projection":
+        if stage_name.startswith("projection_forward_"):
+            return Path("projection_forward") / stage_name.removeprefix("projection_forward_")
+        raise ValueError(f"unsupported projection stage: {stage_name}")
 
     raise ValueError(f"unsupported subgraph for stage layout: {subgraph}")
 
@@ -257,6 +266,89 @@ def radix_sort_case(stage_name: str, keys: Iterable[int], notes: str) -> Fixture
     )
 
 
+def projection_forward_case(stage_name: str, emulate_int64: int) -> FixtureCase:
+    sh_coeffs = [0.0] * (12 * SH_REORDER_SIZE * 4)
+    rect_dtype = "int32" if emulate_int64 else "int64"
+    rect_shape = (2,) if emulate_int64 else (1,)
+    rect_initial = [0, 0] if emulate_int64 else [0]
+    profile_name = "emulated int64" if emulate_int64 else "native int64"
+
+    return FixtureCase(
+        stage_name=stage_name,
+        subgraph="projection",
+        fixture_bindings=(
+            "xyz_ws",
+            "sh_coeffs",
+            "rotations",
+            "scales_opacs",
+            "tiles_touched",
+            "rect_tile_space",
+            "radii",
+            "xy_vs",
+            "depths",
+            "inv_cov_vs_opacity",
+            "rgb",
+        ),
+        fixture_buffers=(
+            BufferData("xyz_ws", "float32", (1, 3), (0.0, 0.0, 4.0)),
+            BufferData("sh_coeffs", "float32", (12 * SH_REORDER_SIZE, 4), tuple(sh_coeffs)),
+            BufferData("rotations", "float32", (1, 4), (1.0, 0.0, 0.0, 0.0)),
+            BufferData("scales_opacs", "float32", (1, 4), (0.2, 0.2, 0.2, 0.5)),
+            BufferData("tiles_touched", "int32", (1,), (0,)),
+            BufferData("rect_tile_space", rect_dtype, rect_shape, tuple(rect_initial)),
+            BufferData("radii", "int32", (1,), (0,)),
+            BufferData("xy_vs", "float32", (1, 2), (0.0, 0.0)),
+            BufferData("depths", "float32", (1,), (0.0,)),
+            BufferData("inv_cov_vs_opacity", "float32", (1, 4), (0.0, 0.0, 0.0, 0.0)),
+            BufferData("rgb", "float32", (1, 3), (0.0, 0.0, 0.0)),
+        ),
+        golden_bindings=(),
+        golden_buffers=(),
+        fixture_notes=(
+            "Synthetic projection_forward invariant fixture for one centered visible splat "
+            f"using {profile_name} rect_tile_space layout"
+        ),
+        golden_notes=(
+            "Invariant-only projection_forward case; no ref-derived golden outputs are committed for this stage"
+        ),
+        emulate_int64=emulate_int64,
+        profile_agnostic=False,
+        uniforms={
+            "image_height": 32,
+            "image_width": 32,
+            "grid_height": 2,
+            "grid_width": 2,
+            "num_splats": 1,
+            "active_sh": 0,
+            "step": 0,
+            "camera_model": 0,
+            "fx": 16.0,
+            "fy": 16.0,
+            "cx": 16.0,
+            "cy": 16.0,
+            "dist_coeffs": [0.0, 0.0, 0.0, 0.0],
+            "world_view_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ],
+        },
+    )
+
+
 def fixture_cases() -> tuple[FixtureCase, ...]:
     near_block_values = tuple((index % 7) - 3 for index in range(CUMSUM_BLOCK_SIZE - 1))
     exact_block_values = tuple(1 for _ in range(CUMSUM_BLOCK_SIZE))
@@ -332,6 +424,8 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         radix_sort_case("radix_sort_duplicates", duplicate_keys, "duplicate-key stable sorting"),
         radix_sort_case("radix_sort_sorted", sorted_keys, "already-sorted input"),
         radix_sort_case("radix_sort_reverse", reverse_keys, "reverse-sorted input"),
+        projection_forward_case("projection_forward_native_int64", 0),
+        projection_forward_case("projection_forward_emulated_int64", 1),
     )
 
 
@@ -360,10 +454,14 @@ def manifest_for(case: FixtureCase, buffers: tuple[BufferData, ...], bindings: t
         "shapes": {buffer.name: list(buffer.shape) for buffer in buffers},
         "dtypes": {buffer.name: buffer.dtype for buffer in buffers},
         "cmake_preset": DEFAULT_CMAKE_PRESET,
-        "emulate_int64": 0,
+        "emulate_int64": case.emulate_int64,
         "emulate_f32_atomic": 0,
+        "profile_agnostic": case.profile_agnostic,
         "vkbd_source": "synthetic",
     }
+
+    if case.uniforms is not None:
+        manifest["uniforms"] = case.uniforms
 
     epsilons = {buffer.name: buffer.epsilon for buffer in buffers if buffer.epsilon is not None}
     if epsilons:

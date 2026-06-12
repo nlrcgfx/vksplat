@@ -14,7 +14,7 @@ For the broader test coverage matrix, known gaps, and hardening roadmap, see the
 - `fixtures/<group>/<case>/`: inputs, initial mutable output buffers, and `manifest.json`
 - `golden_masters/<group>/<case>/`: expected outputs and `manifest.json` (mirrors `fixtures/` paths)
 
-Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`. Each case directory holds one globally unique `stage_name` in its manifest (for example `cumsum_single_pass` under `fixtures/cumsum/single_pass/`).
+Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`, `projection_forward`. Each case directory holds one globally unique `stage_name` in its manifest (for example `cumsum_single_pass` under `fixtures/cumsum/single_pass/`).
 
 All `.bin` files are raw little-endian buffers interpreted through the stage manifest
 `dtype` and `shape`.
@@ -70,6 +70,12 @@ Current radix sort fixture assumptions mirror `nlrc_vksplat_config.hpp`:
 - `RADIX_PARTITION_DIVISION = 8`
 - `RADIX_PARTITION_SIZE = 4096`
 
+Current projection fixture assumptions mirror `nlrc_vksplat_config.hpp`:
+
+- `SH_REORDER_SIZE = 32`
+- `TILE_WIDTH = TILE_HEIGHT = 16`
+- `rect_tile_space` uses either one `int64` word or two emulated `int32` words, depending on manifest profile
+
 ## When Block Sizes Change
 
 Treat any change to `VKSPLAT_*_BLOCK_SIZE`, `VKSPLAT_RADIX_*`, or
@@ -115,6 +121,8 @@ python test_data\generate_fixtures.py --check
 | `radix_sort_duplicates` | full radix sort pipeline | duplicate-key sequence `[17, 4, 17, 9, 4, 17, 9, 4, 0, 17, 0, 9]` | CPU stable-sort by key | Duplicate-key stability and histogram correctness. |
 | `radix_sort_sorted` | full radix sort pipeline | 64 already-sorted generated keys | unchanged stable sorted keys/indices | Regression guard for sorted input. |
 | `radix_sort_reverse` | full radix sort pipeline | 64 reverse-sorted generated keys | CPU stable-sort by key | Regression guard for reverse-sorted input. |
+| `projection_forward_native_int64` | `projection_forward` GPU shader | `N=1`; `xyz_ws=[0,0,4]`; zero SH coefficients padded to `12 * 32` `float4` entries; `rotations=[1,0,0,0]`; `scales_opacs=[0.2,0.2,0.2,0.5]`; outputs zero-initialized; uniforms use a 32x32 pinhole camera, 2x2 tile grid, identity world-view transform, `active_sh=0` | none; invariant-only oracle | Native-`int64` `rect_tile_space` layout plus finite/bounded projection outputs for one visible centered splat. |
+| `projection_forward_emulated_int64` | `projection_forward` GPU shader | Same as `projection_forward_native_int64`, except `rect_tile_space` is two `int32` words | none; invariant-only oracle | Emulated-`int64` `rect_tile_space` layout plus finite/bounded projection outputs for one visible centered splat. |
 
 Fixture `stage_name` values are globally unique (`cumsum_single_pass`, `radix_sort_single_partition`);
 manifest `subgraph` records the porting family (`utility`, `radix_sort`, `harness`), while
@@ -123,6 +131,10 @@ shader fixtures validate isolated dispatch behavior before larger ref-parity fix
 are added. The radix sort fixtures validate the isolated Phase 2 sort pipeline. Their
 manifests list the working buffers, while per-pass descriptor order is asserted in
 `test_radix_sort.cpp` from the binding contract in `ref/docs/shader-pipeline.md`.
+Projection manifests list descriptor bindings `0..10` in the exact order from
+`shader-pipeline.md`: `xyz_ws`, `sh_coeffs`, `rotations`, `scales_opacs`,
+`tiles_touched`, `rect_tile_space`, `radii`, `xy_vs`, `depths`,
+`inv_cov_vs_opacity`, `rgb`.
 
 ## Manifest Schema
 
@@ -144,6 +156,7 @@ Optional fields:
 
 - `vkbd_source`
 - `epsilon`
+- `profile_agnostic`
 
 Generator-owned fields for synthetic fixtures:
 
@@ -160,7 +173,11 @@ Shapes must be non-empty and all dimensions must be positive. Goldens may includ
 per-buffer `epsilon`; default epsilon is `1e-5` for `float32`.
 
 Default build profile for new synthetic fixtures is `windows-debug` with
-`emulate_int64: 0` and `emulate_f32_atomic: 0`.
+`emulate_int64: 0` and `emulate_f32_atomic: 0`. Use `profile_agnostic: true`
+only for fixtures whose buffers are valid across native and emulated int64
+profiles. Profile-specific fixtures, such as `projection_forward_*`, keep
+`profile_agnostic: false` and are selected by tests according to the active
+build profile.
 
 ## Adding Synthetic Fixtures
 

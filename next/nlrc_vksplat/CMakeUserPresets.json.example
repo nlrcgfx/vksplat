@@ -1,0 +1,99 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "emulated-int64",
+      "hidden": true,
+      "cacheVariables": {
+        "NLRC_VKSPLAT_EMULATE_INT64": "ON"
+      }
+    },
+    {
+      "name": "windows-debug-emulated-int64",
+      "displayName": "Windows Debug (emulated int64)",
+      "description": "Windows host Ninja debug build with NLRC_VKSPLAT_EMULATE_INT64=ON for OHOS-parity testing",
+      "inherits": [
+        "windows-debug",
+        "emulated-int64"
+      ]
+    },
+    {
+      "name": "windows-release-emulated-int64",
+      "displayName": "Windows Release (emulated int64)",
+      "description": "Windows host Ninja release build with NLRC_VKSPLAT_EMULATE_INT64=ON for OHOS-parity testing",
+      "inherits": [
+        "windows-release",
+        "emulated-int64"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug-emulated-int64",
+      "configurePreset": "windows-debug-emulated-int64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-release-emulated-int64",
+      "configurePreset": "windows-release-emulated-int64",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug-emulated-int64",
+      "configurePreset": "windows-debug-emulated-int64"
+    },
+    {
+      "name": "windows-release-emulated-int64",
+      "configurePreset": "windows-release-emulated-int64"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "windows-debug-emulated-int64",
+      "displayName": "Configure, build, and test Windows debug (emulated int64)",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows-debug-emulated-int64"
+        },
+        {
+          "type": "build",
+          "name": "windows-debug-emulated-int64"
+        },
+        {
+          "type": "test",
+          "name": "windows-debug-emulated-int64"
+        }
+      ]
+    },
+    {
+      "name": "windows-release-emulated-int64",
+      "displayName": "Configure, build, and test Windows release (emulated int64)",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows-release-emulated-int64"
+        },
+        {
+          "type": "build",
+          "name": "windows-release-emulated-int64"
+        },
+        {
+          "type": "test",
+          "name": "windows-release-emulated-int64"
+        }
+      ]
+    }
+  ]
+}
