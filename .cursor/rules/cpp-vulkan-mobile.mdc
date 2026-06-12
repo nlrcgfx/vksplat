@@ -1,6 +1,6 @@
 ---
 description: C++17 and mobile-first Vulkan standards for the rewrite
-globs: next/**/*.{h,hpp,cpp,cxx}
+globs: next/**/*.{hpp,cpp}
 alwaysApply: false
 ---
 

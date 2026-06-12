@@ -9,10 +9,22 @@ Monorepo for VkSplat-based 3D Gaussian Splatting training research. The reposito
 | [`ref/`](ref/) | Reference VkSplat copy (mostly readonly; critical bugfixes only) |
 | [`ref/vksplat/`](ref/vksplat/) | CMake/Python project root for the reference build |
 | [`ref/docs/`](ref/docs/) | Reference architecture and porting notes |
-| `next/nlrc_vksplat/` | New implementation (Phase 2 — not yet scaffolded) |
+| [`next/nlrc_vksplat/`](next/nlrc_vksplat/) | New implementation (Phase 2 rewrite) |
 | `outputs/` | Training runs and buffer dumps (gitignored) |
 
 Reference baseline tag: **`ref-baseline-2026-06-12`**
+
+## Quick start (rewrite)
+
+Build the scaffold library:
+
+```bash
+cd next/nlrc_vksplat
+cmake --preset windows-release
+cmake --build --preset windows-release
+```
+
+**VS Code / Cursor:** open the repo root, install the recommended extensions when prompted, then run **CMake: Configure** (or `cmake --preset windows-debug`) so `build/compile_commands.json` is available for clangd.
 
 ## Quick start (reference)
 
@@ -47,4 +59,4 @@ pip install -e . --no-build-isolation
 ## Policy
 
 - **`ref/`**: regression baseline and golden buffer dumps; avoid feature work here
-- **`next/nlrc_vksplat/`**: all new architecture and implementation (coming in Phase 2)
+- **`next/nlrc_vksplat/`**: all new architecture and implementation

@@ -1,0 +1,45 @@
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++17
+UseTab: Never
+IndentWidth: 2
+TabWidth: 2
+ConstructorInitializerIndentWidth: 2
+ColumnLimit: 120
+AccessModifierOffset: -2
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignOperands: Align
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: true
+BinPackParameters: OnePerLine
+BreakBeforeBraces: Attach
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+IndentCaseLabels: true
+NamespaceIndentation: None
+ReflowComments: true
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+MainIncludeChar: Any
+IncludeCategories:
+  - Regex: '^<[a-z_]+>$'
+    Priority: 1
+  - Regex: '^<(catch2|vulkan)/'
+    Priority: 2
+  - Regex: '^<vkdq/'
+    Priority: 3
+  - Regex: '^"'
+    Priority: 4
+  - Regex: '^<'
+    Priority: 5

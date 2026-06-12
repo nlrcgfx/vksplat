@@ -1,0 +1,26 @@
+{
+  "cmake.sourceDirectory": "${workspaceFolder}/next/nlrc_vksplat",
+  "cmake.useCMakePresets": "always",
+
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.detectExtensionConflicts": true,
+
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+    "editor.formatOnSave": true
+  },
+
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "files.associations": {
+    "*.hpp": "cpp"
+  },
+
+  "files.watcherExclude": {
+    "**/next/nlrc_vksplat/build/**": true
+  },
+  "search.exclude": {
+    "**/next/nlrc_vksplat/build/**": true
+  }
+}

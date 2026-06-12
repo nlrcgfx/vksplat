@@ -1,0 +1,129 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "warnings": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-base",
+      "hidden": true
+    },
+    {
+      "name": "ohos-base",
+      "hidden": true,
+      "toolchainFile": "$env{OHOS_SDK_NATIVE}/build/cmake/ohos.toolchain.cmake",
+      "cmakeExecutable": "$env{OHOS_SDK_NATIVE}/build-tools/cmake/bin/cmake",
+      "cacheVariables": {
+        "OHOS_ARCH": "arm64-v8a",
+        "OHOS_STL": "c++_shared"
+      },
+      "condition": {
+        "type": "notEquals",
+        "lhs": "$env{OHOS_SDK_NATIVE}",
+        "rhs": ""
+      }
+    },
+    {
+      "name": "windows-debug",
+      "displayName": "Windows Debug",
+      "description": "Windows host Ninja debug build",
+      "inherits": [
+        "base",
+        "debug",
+        "windows-base"
+      ]
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release",
+      "description": "Windows host Ninja release build",
+      "inherits": [
+        "base",
+        "release",
+        "windows-base"
+      ]
+    },
+    {
+      "name": "ohos-debug",
+      "displayName": "OHOS Debug (arm64)",
+      "description": "Cross-compile for OpenHarmony arm64-v8a with c++_shared",
+      "inherits": [
+        "base",
+        "debug",
+        "ohos-base"
+      ]
+    },
+    {
+      "name": "ohos-release",
+      "displayName": "OHOS Release (arm64)",
+      "description": "Cross-compile for OpenHarmony arm64-v8a with c++_shared",
+      "inherits": [
+        "base",
+        "release",
+        "ohos-base"
+      ]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release"
+    },
+    {
+      "name": "ohos-debug",
+      "configurePreset": "ohos-debug"
+    },
+    {
+      "name": "ohos-release",
+      "configurePreset": "ohos-release"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "displayName": "Configure and build windows-release",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows-release"
+        },
+        {
+          "type": "build",
+          "name": "windows-release"
+        }
+      ]
+    }
+  ]
+}

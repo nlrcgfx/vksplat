@@ -1,0 +1,14 @@
+# CMake (configure from next/nlrc_vksplat/)
+nlrc_vksplat/build/
+nlrc_vksplat/build-*/
+
+# Generated SPIR-V / embedded shader headers (future)
+nlrc_vksplat/shader/generated/
+nlrc_vksplat/slang/config_generated.slang
+nlrc_vksplat/shader/radix_sort/config_generated.glsl
+
+# Vendored deps (archives may be committed; extracted trees are not)
+nlrc_vksplat/contrib/glm/
+
+# Local CMake preset overrides (next to CMakePresets.json)
+nlrc_vksplat/CMakeUserPresets.json

@@ -1,0 +1,22 @@
+CompileFlags:
+  CompilationDatabase: build
+
+Index:
+  Background: Build
+
+Diagnostics:
+  ClangTidy:
+    FastCheckFilter: Strict
+  MissingIncludes: Strict
+  UnusedIncludes: Strict
+
+Completion:
+  HeaderInsertion: IWYU
+  ArgumentLists: FullPlaceholders
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+  Designators: true
+  DefaultArguments: false

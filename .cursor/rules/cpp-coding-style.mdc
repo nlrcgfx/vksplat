@@ -1,0 +1,51 @@
+---
+description: C++17 file layout, const/constexpr, and style for the rewrite
+globs: next/**/*.{hpp,cpp}
+alwaysApply: false
+---
+
+# C++ Coding Style (Rewrite)
+
+Applies to `next/nlrc_vksplat/` only. Keep rules binary and checkable.
+
+## Files and layout
+
+- Use **`.hpp`** for headers and **`.cpp`** for sources — never `.h` or `.c`
+- **`#pragma once`** in every header
+- Namespace **`nlrc::vksplat`** for library code
+- Paired TUs: `foo.hpp` + `foo.cpp`; declarations in hpp, definitions in cpp (templates / header-only `constexpr` in hpp when required)
+- No **`using namespace`** in headers
+
+```cpp
+// BAD — ref-style header name in rewrite
+#include "buffer.h"
+
+// GOOD
+#include "buffer.hpp"
+```
+
+## const and constexpr
+
+- **`const` by default**: immutable locals, `const&` for read-only inputs, `const` member functions when state is not modified
+- **`constexpr` when compile-time**: `inline constexpr` for constants (`kFoo`), `constexpr` for pure functions evaluable at compile time
+- **`nullptr`** for null pointers — never `NULL` or `0`
+
+```cpp
+// BAD
+char* version();
+int tile_size = 16;
+
+// GOOD
+[[nodiscard]] const char* version();
+inline constexpr int kTileSize = 16;
+```
+
+## Types and APIs
+
+- Prefer **`enum class`** over unscoped `enum` (unless C/Vulkan ABI requires raw `enum`)
+- Mark single-argument constructors **`explicit`** unless implicit conversion is intentional (add a brief comment)
+- Apply **`[[nodiscard]]`** to getters, handles, and status/error returns
+
+## Tooling
+
+Naming follows [`.clang-tidy`](next/nlrc_vksplat/.clang-tidy); formatting follows [`.clang-format`](next/nlrc_vksplat/.clang-format).

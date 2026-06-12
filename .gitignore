@@ -15,7 +15,9 @@ dist/
 *.lock
 
 # IDE / editor
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .vs/
 .idea/
 *.user
