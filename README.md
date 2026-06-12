@@ -73,6 +73,7 @@ pip install -e . --no-build-isolation
 ## Documentation
 
 - [Reference README](ref/README.md) - full VkSplat install, training, and development guide
+- [Rewrite testing report](next/nlrc_vksplat/docs/testing-report.md) - current test coverage, gaps, and hardening roadmap
 - [Shader pipeline](ref/docs/shader-pipeline.md) - GPU compute stages and buffer layout
 - [OHOS porting report](ref/docs/ohos-maleoon910-porting-report.md) - OpenHarmony / Maleoon notes
 

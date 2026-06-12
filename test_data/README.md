@@ -5,6 +5,9 @@ Synthetic fixture values are defined in `generate_fixtures.py`; the checked-in `
 and `manifest.json` files are generated outputs kept in git so CTest can run without
 an extra setup step.
 
+For the broader test coverage matrix, known gaps, and hardening roadmap, see the
+[rewrite testing report](../next/nlrc_vksplat/docs/testing-report.md).
+
 ## Layout
 
 - `generate_fixtures.py`: source of truth for synthetic fixture values, expected values, manifests, and binary payloads
