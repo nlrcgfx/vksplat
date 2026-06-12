@@ -1,19 +1,7 @@
-# CMake (primary build dir: cmake -B build from ref/vksplat/)
-ref/vksplat/build/
-ref/vksplat/build-*/
+# Training / benchmark outputs
+outputs/
 
-# Legacy local build dirs
-build/
-vksplat/build/
-vksplat/build-*/
-
-# Generated SPIR-V shaders (compile_shaders.py)
-ref/vksplat/shader/generated/
-ref/vksplat/shader/checksum.json
-ref/vksplat/slang/config_generated.slang
-ref/vksplat/shader/radix_sort/config_generated.glsl
-
-# Python
+# Python (all trees: ref/, next/, tools/)
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -26,14 +14,8 @@ dist/
 .slangtorch_cache/
 *.lock
 
-# Vendored deps (glm-1.0.3.zip is committed; extracted tree is not)
-ref/vksplat/contrib/glm/
-
 # IDE / editor
 .vscode/
 .vs/
 .idea/
 *.user
-CMakeUserPresets.json
-
-outputs/

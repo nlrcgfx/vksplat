@@ -1,0 +1,15 @@
+# CMake (configure from ref/vksplat/)
+vksplat/build/
+vksplat/build-*/
+
+# Generated SPIR-V shaders (run compile_shaders.py from ref/)
+vksplat/shader/generated/
+vksplat/shader/checksum.json
+vksplat/slang/config_generated.slang
+vksplat/shader/radix_sort/config_generated.glsl
+
+# Vendored deps (glm-1.0.3.zip is committed; extracted tree is not)
+vksplat/contrib/glm/
+
+# Local CMake preset overrides (next to CMakePresets.json)
+vksplat/CMakeUserPresets.json

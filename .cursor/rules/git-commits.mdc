@@ -86,7 +86,7 @@ On Windows/PowerShell, use `-m "subject" -m "body"` if HEREDOC is unavailable.
 
 ## Do not stage (unless user explicitly asks)
 
-- Build outputs: `build/`, `vksplat/build/`
+- Build outputs: `ref/vksplat/build/`
 - Caches: `.slangtorch_cache`, `__pycache__/`
 
 If `git status` shows build artifacts, stage only source changes and mention that build dirs were skipped.
