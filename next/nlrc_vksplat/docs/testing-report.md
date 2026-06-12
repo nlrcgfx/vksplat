@@ -11,7 +11,7 @@ current test surface, and where future hardening should focus.
 | Test binary | `nlrc_vksplat_tests` (Catch2 + CTest) |
 | Host tests | `[host]` cases; reliable baseline on normal dev machines |
 | GPU tests | `[gpu]` cases; controlled by `NLRC_VKSPLAT_GPU_TESTS` (`AUTO`, `REQUIRE`, `OFF`) |
-| Covered dispatches | Smoke compute wrapper; Subgraph D utilities: cumsum, sum, where; isolated 32-bit radix sort; isolated Subgraph A `projection_forward`, `generate_keys`, `compute_tile_ranges`, and `rasterize_forward`; small `projection_forward -> cumsum -> generate_keys` chain |
+| Covered dispatches | Smoke compute wrapper; Subgraph D utilities: cumsum, sum, where; isolated 32-bit radix sort; isolated Subgraph A `projection_forward`, `generate_keys`, `compute_tile_ranges`, and `rasterize_forward`; integrated Subgraph A `forward()` chain |
 | Fixture source | [`test_data/generate_fixtures.py`](../../../test_data/generate_fixtures.py) |
 | Per-fixture values | [`test_data/README.md`](../../../test_data/README.md) fixture catalog |
 
@@ -89,6 +89,7 @@ use `scripts/build-windows.ps1 -PythonExe <path>` or configure CMake with
 | Generate keys | `[gpu]` | Isolated second Subgraph A dispatch plus a small upstream chain | `test_generate_keys.cpp`, generated fixture data | `generate_keys` consumes `xy_vs`, `depths`, `rect_tile_space`, `inv_cov_vs_opacity`, and inclusive `index_buffer_offset`; exact CPU goldens validate key packing and splat indices for native or emulated `rect_tile_space`. A separate test chains `projection_forward -> cumsum_single_pass -> generate_keys` and asserts valid output length, tile IDs, and splat indices. |
 | Compute tile ranges | `[gpu]` | Isolated post-sort Subgraph A dispatch | `test_compute_tile_ranges.cpp`, generated fixture data | `compute_tile_ranges` consumes sorted keys and writes `num_tiles + 1` start offsets; exact CPU goldens and invariants validate monotonic ranges, terminal sentinel, valid per-tile intervals, and `active_sh` aliasing as `num_indices`. |
 | Rasterize forward | `[gpu]` | Isolated final Subgraph A dispatch | `test_rasterize_forward.cpp`, generated fixture data | `rasterize_forward` consumes sorted splat indices, tile ranges, and projection-style splat attributes; invariant-only checks validate finite pixel buffers, transmittance bounds, empty-tile baseline output, and visible contributions at known splat centers. |
+| Forward integration | `[gpu]` | Integrated Subgraph A forward chain | `test_forward.cpp`, generated projection fixture data | `execute_forward` runs `projection_forward -> cumsum -> generate_keys -> radix sort -> compute_tile_ranges -> rasterize_forward`, validates sorted keys, tile ranges, finite pixels, visible contribution, and the `num_indices == 0` early exit that skips sort/ranges/rasterization. |
 
 ## Fixture and golden data coverage
 
@@ -130,6 +131,7 @@ The Python fixture generator mirrors shader sizing constants from
 | `SH_REORDER_SIZE` | `VKSPLAT_SH_REORDER_SIZE` | 32 |
 | fixture image size | test-local `VulkanGSRendererUniforms` | 32x32 |
 | fixture tile grid | `TILE_WIDTH = TILE_HEIGHT = 16` | 2x2 |
+| no-visible fixture | one splat behind `NEAR_CLIP` | `tiles_touched=0` after projection |
 
 #### Generate keys mirrors
 
@@ -197,6 +199,8 @@ constants above.
 | `radix_sort_reverse` | radix sort | `[gpu]` | 64 | Reverse-sorted input regression guard |
 | `projection_forward_native_int64` | projection | `[gpu]` | `N=1` | Native-`int64` `rect_tile_space` layout and invariant-only projection output checks |
 | `projection_forward_emulated_int64` | projection | `[gpu]` | `N=1` | Emulated-`int64` `rect_tile_space` layout and invariant-only projection output checks |
+| `projection_forward_no_visible_native_int64` | projection | `[gpu]` | `N=1` | Native-`int64` no-visible projection fixture used by forward early-exit coverage |
+| `projection_forward_no_visible_emulated_int64` | projection | `[gpu]` | `N=1` | Emulated-`int64` no-visible projection fixture used by forward early-exit coverage |
 | `generate_keys_native_int64` | generate_keys | `[gpu]` | `N=4`, `num_indices=3` | Native-`int64` exact key/index goldens, inclusive cumsum offsets, zero-touch splat skip |
 | `generate_keys_emulated_int64` | generate_keys | `[gpu]` | `N=4`, `num_indices=3` | Emulated-`int64` exact key/index goldens, inclusive cumsum offsets, zero-touch splat skip |
 | `compute_tile_ranges` | compute_tile_ranges | `[gpu]` | `num_indices=4`, `num_tiles=6` | Exact tile range golden, duplicate tile entries, gaps, monotonic intervals, and terminal sentinel |
@@ -241,13 +245,13 @@ Host tests are the reliable baseline. GPU tests are controlled by
 
 GPU tests validate correctness for small deterministic utility shader cases, not
 cross-device numerical stability, performance, or full rendering/training behavior.
-Radix sort GPU tests are isolated 32-bit integer checks; they do not wire sorted
-keys into Subgraph A or G. Projection and generate_keys tests select the fixture
+Radix sort GPU tests include isolated 32-bit integer checks and an integrated
+Subgraph A forward chain. Projection and generate_keys tests select the fixture
 whose `emulate_int64` field matches the active build profile. Projection uses
 invariant checks, while generate_keys and compute_tile_ranges use synthetic
-CPU-computed exact goldens. Rasterize forward uses synthetic invariant-only
-fixtures because exact rendered-image parity is intentionally deferred until a
-stable CPU/ref-derived oracle and tolerance policy exist.
+CPU-computed exact goldens. Rasterize and forward integration use synthetic
+invariant-only fixtures because exact rendered-image parity is intentionally
+deferred until a stable CPU/ref-derived oracle and tolerance policy exist.
 
 ## Not covered
 
@@ -262,9 +266,9 @@ Status meanings: **Future plan** = planned work; **Blocked** = external dependen
 | Renderer/image-quality regression tests | No rewrite renderer output oracle or image comparison harness. Define small scene fixtures, output format, and tolerated metrics first. |
 | `projection_forward` ref parity | The first projection fixture is synthetic and invariant-only. Add curated ref-derived buffers after dump provenance and tolerances are documented. |
 | `generate_keys` ref parity | The first generate_keys fixtures are synthetic exact CPU goldens, not curated ref dumps. Add ref-derived buffers only after dump provenance and tolerances are documented. |
-| `forward()` wiring | `projection_forward`, `generate_keys`, `compute_tile_ranges`, and `rasterize_forward` have isolated coverage, with a small `projection_forward -> cumsum -> generate_keys` upstream chain, but they are not wired into a renderer/subgraph wrapper yet. |
-| Radix sort integration with Subgraph A/G | Isolated radix sort and Subgraph A dispatches are covered, but `generate_keys -> radix sort -> compute_tile_ranges -> rasterize_forward` is not wired as one pipeline, and Morton sort producers/consumers are not wired through yet. |
-| Radix sort zero-element no-op | Current fixture schema and `StorageBuffer` require non-empty buffers, and the ref pipeline skips sort when `num_indices == 0`. Add this as a wrapper/subgraph no-op test when Subgraph A/G wiring exists. |
+| Renderer/session `forward()` parity | `execute_forward` covers the Subgraph A GPU chain, but there is no higher-level renderer/session wrapper matching ref object ownership, scheduling, or dumps. |
+| Radix sort integration with Subgraph G | Radix sort is wired into Subgraph A forward integration, but Morton sort producers/consumers are not wired through yet. |
+| Radix sort zero-element isolated no-op | Current fixture schema and `StorageBuffer` require non-empty buffers. The integrated forward wrapper covers the ref zero-index skip path; add a lower-level no-op only if a future wrapper needs to call sort directly with zero elements. |
 | Radix sort 64-bit key path | Current rewrite config uses `VKSPLAT_SORTING_KEY_BITS = 32`. Add 64-bit fixtures and shader-profile validation only if the rewrite enables 64-bit sorting keys. |
 | Radix sort large spine-loop path | Current fixtures cover `num_parts = 1` and `num_parts = 2`, not `num_parts > VKSPLAT_RADIX_WORKGROUP_SIZE`. Add a generated-at-test-time or slow fixture if that path becomes important. |
 | Remaining rewrite shader stages | Smoke, Subgraph D utilities, isolated radix sort, and isolated Subgraph A forward dispatches are covered. Add one synthetic invariant fixture per new stage before ref-parity fixtures. |

@@ -314,12 +314,14 @@ def radix_sort_case(stage_name: str, keys: Iterable[int], notes: str) -> Fixture
     )
 
 
-def projection_forward_case(stage_name: str, emulate_int64: int) -> FixtureCase:
+def projection_forward_case(stage_name: str, emulate_int64: int, visible: bool = True) -> FixtureCase:
     sh_coeffs = [0.0] * (12 * SH_REORDER_SIZE * 4)
     rect_dtype = "int32" if emulate_int64 else "int64"
     rect_shape = (2,) if emulate_int64 else (1,)
     rect_initial = [0, 0] if emulate_int64 else [0]
     profile_name = "emulated int64" if emulate_int64 else "native int64"
+    xyz_ws = (0.0, 0.0, 4.0) if visible else (0.0, 0.0, 0.0)
+    visibility_note = "one centered visible splat" if visible else "one no-visible splat behind the near plane"
 
     return FixtureCase(
         stage_name=stage_name,
@@ -338,7 +340,7 @@ def projection_forward_case(stage_name: str, emulate_int64: int) -> FixtureCase:
             "rgb",
         ),
         fixture_buffers=(
-            BufferData("xyz_ws", "float32", (1, 3), (0.0, 0.0, 4.0)),
+            BufferData("xyz_ws", "float32", (1, 3), xyz_ws),
             BufferData("sh_coeffs", "float32", (12 * SH_REORDER_SIZE, 4), tuple(sh_coeffs)),
             BufferData("rotations", "float32", (1, 4), (1.0, 0.0, 0.0, 0.0)),
             BufferData("scales_opacs", "float32", (1, 4), (0.2, 0.2, 0.2, 0.5)),
@@ -353,8 +355,8 @@ def projection_forward_case(stage_name: str, emulate_int64: int) -> FixtureCase:
         golden_bindings=(),
         golden_buffers=(),
         fixture_notes=(
-            "Synthetic projection_forward invariant fixture for one centered visible splat "
-            f"using {profile_name} rect_tile_space layout"
+            f"Synthetic projection_forward invariant fixture for {visibility_note} using "
+            f"{profile_name} rect_tile_space layout"
         ),
         golden_notes=(
             "Invariant-only projection_forward case; no ref-derived golden outputs are committed for this stage"
@@ -794,6 +796,8 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         radix_sort_case("radix_sort_reverse", reverse_keys, "reverse-sorted input"),
         projection_forward_case("projection_forward_native_int64", 0),
         projection_forward_case("projection_forward_emulated_int64", 1),
+        projection_forward_case("projection_forward_no_visible_native_int64", 0, visible=False),
+        projection_forward_case("projection_forward_no_visible_emulated_int64", 1, visible=False),
         generate_keys_case("generate_keys_native_int64", 0),
         generate_keys_case("generate_keys_emulated_int64", 1),
         compute_tile_ranges_case(),

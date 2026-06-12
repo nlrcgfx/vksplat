@@ -200,6 +200,34 @@ void validate_rasterize_forward_bindings(const RasterizeForwardBindings &binding
   require_buffer_elements<std::int32_t>(*bindings.n_contributors, num_pixels, "n_contributors");
 }
 
+void validate_forward_bindings(const ForwardBindings &bindings, const RendererUniforms &uniforms) {
+  require_binding(bindings.index_buffer_offset, "index_buffer_offset");
+  require_binding(bindings.sorting_keys_1, "sorting_keys_1");
+  require_binding(bindings.sorting_gauss_idx_1, "sorting_gauss_idx_1");
+  require_binding(bindings.sorting_keys_2, "sorting_keys_2");
+  require_binding(bindings.sorting_gauss_idx_2, "sorting_gauss_idx_2");
+  require_binding(bindings.tile_ranges, "tile_ranges");
+  require_binding(bindings.pixel_state, "pixel_state");
+  require_binding(bindings.n_contributors, "n_contributors");
+
+  const auto num_splats = static_cast<std::size_t>(require_uint32_count(uniforms.num_splats, "num_splats"));
+  const auto num_tiles = require_tile_count(uniforms);
+  const auto num_pixels = require_pixel_count(uniforms);
+  if (num_splats > std::numeric_limits<std::size_t>::max() / num_tiles) {
+    throw std::invalid_argument("forward scratch capacity overflows size_t");
+  }
+  const auto max_indices = num_splats * num_tiles;
+
+  require_buffer_elements<std::int32_t>(*bindings.index_buffer_offset, num_splats, "index_buffer_offset");
+  require_buffer_elements<SortingKey>(*bindings.sorting_keys_1, max_indices, "sorting_keys_1");
+  require_buffer_elements<std::int32_t>(*bindings.sorting_gauss_idx_1, max_indices, "sorting_gauss_idx_1");
+  require_buffer_elements<SortingKey>(*bindings.sorting_keys_2, max_indices, "sorting_keys_2");
+  require_buffer_elements<std::int32_t>(*bindings.sorting_gauss_idx_2, max_indices, "sorting_gauss_idx_2");
+  require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
+  require_buffer_elements<float>(*bindings.pixel_state, num_pixels * 4U, "pixel_state");
+  require_buffer_elements<std::int32_t>(*bindings.n_contributors, num_pixels, "n_contributors");
+}
+
 void validate_radix_sort_bindings(const RadixSortBindings &bindings, std::size_t element_count) {
   require_binding(bindings.keys_1, "keys_1");
   require_binding(bindings.indices_1, "indices_1");
@@ -473,6 +501,59 @@ auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindi
   }
 
   return {keys_in, indices_in};
+}
+
+auto execute_forward(const HeadlessContext &context, const ForwardBindings &bindings, const RendererUniforms &uniforms)
+    -> ForwardResult {
+  validate_forward_bindings(bindings, uniforms);
+
+  execute_projection_forward(context, bindings.projection, uniforms);
+  execute_cumsum(context, *bindings.projection.tiles_touched, *bindings.index_buffer_offset, uniforms.num_splats);
+
+  const auto index_buffer_offset = bindings.index_buffer_offset->read_back<std::int32_t>(uniforms.num_splats);
+  const auto num_indices_i32 = index_buffer_offset.back();
+  if (num_indices_i32 < 0) {
+    throw std::runtime_error("forward num_indices is negative");
+  }
+
+  const auto num_indices = static_cast<std::size_t>(num_indices_i32);
+  if (num_indices == 0U) {
+    return {0U, false, nullptr, nullptr};
+  }
+
+  GenerateKeysBindings generate_keys_bindings{};
+  generate_keys_bindings.xy_vs = bindings.projection.xy_vs;
+  generate_keys_bindings.inv_cov_vs_opacity = bindings.projection.inv_cov_vs_opacity;
+  generate_keys_bindings.depths = bindings.projection.depths;
+  generate_keys_bindings.rect_tile_space = bindings.projection.rect_tile_space;
+  generate_keys_bindings.index_buffer_offset = bindings.index_buffer_offset;
+  generate_keys_bindings.unsorted_keys = bindings.sorting_keys_1;
+  generate_keys_bindings.unsorted_gauss_idx = bindings.sorting_gauss_idx_1;
+  execute_generate_keys(context, generate_keys_bindings, uniforms, num_indices);
+
+  RadixSortBindings sort_bindings{};
+  sort_bindings.keys_1 = bindings.sorting_keys_1;
+  sort_bindings.indices_1 = bindings.sorting_gauss_idx_1;
+  sort_bindings.keys_2 = bindings.sorting_keys_2;
+  sort_bindings.indices_2 = bindings.sorting_gauss_idx_2;
+  const auto sort_result = execute_sort(context, sort_bindings, num_indices);
+
+  ComputeTileRangesBindings tile_range_bindings{};
+  tile_range_bindings.sorted_keys = sort_result.keys;
+  tile_range_bindings.tile_ranges = bindings.tile_ranges;
+  execute_compute_tile_ranges(context, tile_range_bindings, uniforms, num_indices);
+
+  RasterizeForwardBindings raster_bindings{};
+  raster_bindings.sorted_gauss_idx = sort_result.indices;
+  raster_bindings.tile_ranges = bindings.tile_ranges;
+  raster_bindings.xy_vs = bindings.projection.xy_vs;
+  raster_bindings.inv_cov_vs_opacity = bindings.projection.inv_cov_vs_opacity;
+  raster_bindings.rgb = bindings.projection.rgb;
+  raster_bindings.pixel_state = bindings.pixel_state;
+  raster_bindings.n_contributors = bindings.n_contributors;
+  execute_rasterize_forward(context, raster_bindings, uniforms, num_indices);
+
+  return {num_indices, true, sort_result.keys, sort_result.indices};
 }
 
 } // namespace nlrc::vksplat::gpu

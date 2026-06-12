@@ -112,6 +112,25 @@ struct RadixSortResult final {
   const StorageBuffer *indices{};
 };
 
+struct ForwardBindings final {
+  ProjectionForwardBindings projection{};
+  StorageBuffer *index_buffer_offset{};
+  StorageBuffer *sorting_keys_1{};
+  StorageBuffer *sorting_gauss_idx_1{};
+  StorageBuffer *sorting_keys_2{};
+  StorageBuffer *sorting_gauss_idx_2{};
+  StorageBuffer *tile_ranges{};
+  StorageBuffer *pixel_state{};
+  StorageBuffer *n_contributors{};
+};
+
+struct ForwardResult final {
+  std::size_t num_indices{};
+  bool rasterized{};
+  const StorageBuffer *sorted_keys{};
+  const StorageBuffer *sorted_gauss_idx{};
+};
+
 [[nodiscard]] std::size_t ceil_div(std::size_t value, std::size_t divisor);
 [[nodiscard]] DispatchShape dispatch_groups_for(std::size_t element_count, std::uint32_t block_size);
 
@@ -152,5 +171,8 @@ void execute_rasterize_forward(const HeadlessContext &context,
 
 [[nodiscard]] RadixSortResult
 execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count);
+
+[[nodiscard]] ForwardResult
+execute_forward(const HeadlessContext &context, const ForwardBindings &bindings, const RendererUniforms &uniforms);
 
 } // namespace nlrc::vksplat::gpu

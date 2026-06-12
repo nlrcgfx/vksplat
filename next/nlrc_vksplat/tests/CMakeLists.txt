@@ -85,6 +85,7 @@ target_sources(nlrc_vksplat_tests
     test_compute_tile_ranges.cpp
     test_fixture_catalog.cpp
     test_fixture_loader.cpp
+    test_forward.cpp
     test_generate_keys.cpp
     test_golden_compare.cpp
     test_gpu_smoke.cpp

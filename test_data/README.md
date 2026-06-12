@@ -75,6 +75,7 @@ Current projection fixture assumptions mirror `nlrc_vksplat_config.hpp`:
 - `SH_REORDER_SIZE = 32`
 - `TILE_WIDTH = TILE_HEIGHT = 16`
 - `rect_tile_space` uses either one `int64` word or two emulated `int32` words, depending on manifest profile
+- visible fixtures place one splat in front of the camera; no-visible fixtures place one splat behind the near plane for forward early-exit coverage
 
 Current `generate_keys` fixture assumptions mirror `nlrc_vksplat_config.hpp`:
 
@@ -144,6 +145,8 @@ python test_data\generate_fixtures.py --check
 | `radix_sort_reverse` | full radix sort pipeline | 64 reverse-sorted generated keys | CPU stable-sort by key | Regression guard for reverse-sorted input. |
 | `projection_forward_native_int64` | `projection_forward` GPU shader | `N=1`; `xyz_ws=[0,0,4]`; zero SH coefficients padded to `12 * 32` `float4` entries; `rotations=[1,0,0,0]`; `scales_opacs=[0.2,0.2,0.2,0.5]`; outputs zero-initialized; uniforms use a 32x32 pinhole camera, 2x2 tile grid, identity world-view transform, `active_sh=0` | none; invariant-only oracle | Native-`int64` `rect_tile_space` layout plus finite/bounded projection outputs for one visible centered splat. |
 | `projection_forward_emulated_int64` | `projection_forward` GPU shader | Same as `projection_forward_native_int64`, except `rect_tile_space` is two `int32` words | none; invariant-only oracle | Emulated-`int64` `rect_tile_space` layout plus finite/bounded projection outputs for one visible centered splat. |
+| `projection_forward_no_visible_native_int64` | `projection_forward` GPU shader and forward early-exit integration | Same as `projection_forward_native_int64`, except `xyz_ws=[0,0,0]` so the splat is behind the near plane | none; invariant-only oracle | Native-`int64` no-visible projection output and `forward()` early exit after `tiles_touched -> index_buffer_offset` produces `num_indices=0`. |
+| `projection_forward_no_visible_emulated_int64` | `projection_forward` GPU shader and forward early-exit integration | Same as `projection_forward_no_visible_native_int64`, except `rect_tile_space` is two `int32` words | none; invariant-only oracle | Emulated-`int64` no-visible projection output and `forward()` early exit after `tiles_touched -> index_buffer_offset` produces `num_indices=0`. |
 | `generate_keys_native_int64` | `generate_keys` GPU shader | `N=4`; 2x2 tile grid; `xy_vs=[(8,8),(0,0),(24,8),(8,24)]`; `depths=[1,2,3,7]`; each `inv_cov_vs_opacity=[1,0,1,0.5]`; rects `[(0,0)-(1,1), empty, (1,0)-(2,1), (0,1)-(1,2)]`; `tiles_touched=[1,0,1,1]`; `index_buffer_offset=[1,1,2,3]`; outputs zero-initialized | `unsorted_keys=[4194304,14680064,24117248]`; `unsorted_gauss_idx=[0,2,3]` | Native-`int64` key packing, inclusive cumsum offset consumption, zero-touch splat skip, and valid splat-index emission. |
 | `generate_keys_emulated_int64` | `generate_keys` GPU shader | Same as `generate_keys_native_int64`, except `rect_tile_space` is two `int32` words per splat | Same as `generate_keys_native_int64` | Emulated-`int64` key packing, inclusive cumsum offset consumption, zero-touch splat skip, and valid splat-index emission. |
 | `compute_tile_ranges` | `compute_tile_ranges` GPU shader | `3x2` tile grid; sorted tile IDs `[1,1,3,4]`; sorted keys `[12582912,13981013,31457280,40894464]`; `tile_ranges` initialized to seven `-1` values | `tile_ranges=[0,0,2,2,3,4,4]` | Per-tile start offset construction, duplicate tile entries, leading empty tile, interior gap, trailing sentinel, and `active_sh` as `num_indices`. |
@@ -174,6 +177,8 @@ order from `shader-pipeline.md`: `sorted_gauss_idx`, `tile_ranges`,
 `xy_vs`, `inv_cov_vs_opacity`, `rgb`, `pixel_state`, `n_contributors`.
 They also include unbound `sorted_keys` provenance data so tests can assert
 the tile ranges agree with decoded tile IDs.
+Forward integration uses the projection fixtures and caller-owned scratch buffers
+inside `test_forward.cpp`; no separate forward fixture group is needed.
 
 ## Manifest Schema
 

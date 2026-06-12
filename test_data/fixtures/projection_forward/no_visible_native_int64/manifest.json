@@ -1,0 +1,130 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "projection_forward_no_visible_native_int64",
+  "subgraph": "projection",
+  "bindings": [
+    "xyz_ws",
+    "sh_coeffs",
+    "rotations",
+    "scales_opacs",
+    "tiles_touched",
+    "rect_tile_space",
+    "radii",
+    "xy_vs",
+    "depths",
+    "inv_cov_vs_opacity",
+    "rgb"
+  ],
+  "buffers": {
+    "xyz_ws": "xyz_ws.bin",
+    "sh_coeffs": "sh_coeffs.bin",
+    "rotations": "rotations.bin",
+    "scales_opacs": "scales_opacs.bin",
+    "tiles_touched": "tiles_touched.bin",
+    "rect_tile_space": "rect_tile_space.bin",
+    "radii": "radii.bin",
+    "xy_vs": "xy_vs.bin",
+    "depths": "depths.bin",
+    "inv_cov_vs_opacity": "inv_cov_vs_opacity.bin",
+    "rgb": "rgb.bin"
+  },
+  "shapes": {
+    "xyz_ws": [
+      1,
+      3
+    ],
+    "sh_coeffs": [
+      384,
+      4
+    ],
+    "rotations": [
+      1,
+      4
+    ],
+    "scales_opacs": [
+      1,
+      4
+    ],
+    "tiles_touched": [
+      1
+    ],
+    "rect_tile_space": [
+      1
+    ],
+    "radii": [
+      1
+    ],
+    "xy_vs": [
+      1,
+      2
+    ],
+    "depths": [
+      1
+    ],
+    "inv_cov_vs_opacity": [
+      1,
+      4
+    ],
+    "rgb": [
+      1,
+      3
+    ]
+  },
+  "dtypes": {
+    "xyz_ws": "float32",
+    "sh_coeffs": "float32",
+    "rotations": "float32",
+    "scales_opacs": "float32",
+    "tiles_touched": "int32",
+    "rect_tile_space": "int64",
+    "radii": "int32",
+    "xy_vs": "float32",
+    "depths": "float32",
+    "inv_cov_vs_opacity": "float32",
+    "rgb": "float32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "profile_agnostic": false,
+  "vkbd_source": "synthetic",
+  "uniforms": {
+    "image_height": 32,
+    "image_width": 32,
+    "grid_height": 2,
+    "grid_width": 2,
+    "num_splats": 1,
+    "active_sh": 0,
+    "step": 0,
+    "camera_model": 0,
+    "fx": 16.0,
+    "fy": 16.0,
+    "cx": 16.0,
+    "cy": 16.0,
+    "dist_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "world_view_transform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "notes": "Synthetic projection_forward invariant fixture for one no-visible splat behind the near plane using native int64 rect_tile_space layout"
+}
