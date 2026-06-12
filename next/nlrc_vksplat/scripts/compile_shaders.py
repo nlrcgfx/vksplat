@@ -139,6 +139,24 @@ class ShaderCompiler:
             ),
             ShaderSource(source="sum.slang", language="slang", jobs=[ShaderJob("sum", {})], deps=["config.slang"]),
             ShaderSource(source="where.slang", language="slang", jobs=[ShaderJob("where", {})], deps=["config.slang"]),
+            ShaderSource(
+                source="radix_sort/upsweep.comp",
+                language="glsl",
+                jobs=[ShaderJob("radix_sort_upsweep", {})],
+                deps=["radix_sort/config.glsl", "config_generated.glsl"],
+            ),
+            ShaderSource(
+                source="radix_sort/spine.comp",
+                language="glsl",
+                jobs=[ShaderJob("radix_sort_spine", {})],
+                deps=["radix_sort/config.glsl", "config_generated.glsl"],
+            ),
+            ShaderSource(
+                source="radix_sort/downsweep.comp",
+                language="glsl",
+                jobs=[ShaderJob("radix_sort_downsweep", {})],
+                deps=["radix_sort/config.glsl", "config_generated.glsl"],
+            ),
         ]
 
     def _compile_slang_job(self, source: ShaderSource, job: ShaderJob) -> Path:

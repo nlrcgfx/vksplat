@@ -87,6 +87,7 @@ target_sources(nlrc_vksplat_tests
     test_golden_compare.cpp
     test_gpu_smoke.cpp
     test_manifest_profile.cpp
+    test_radix_sort.cpp
     test_shader_config_profile.cpp
     test_utility_shaders.cpp
 )

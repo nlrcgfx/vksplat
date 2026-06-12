@@ -19,6 +19,13 @@ DEFAULT_CMAKE_PRESET = "windows-debug"
 CUMSUM_BLOCK_SIZE = 512
 SUM_BLOCK_SIZE = 512
 WHERE_BLOCK_SIZE = 256
+SORTING_KEY_BITS = 32
+RADIX_SORT_RADIX = 256
+RADIX_WORKGROUP_SIZE = 512
+RADIX_PARTITION_DIVISION = 8
+RADIX_PARTITION_SIZE = RADIX_WORKGROUP_SIZE * RADIX_PARTITION_DIVISION
+RADIX_BITS_PER_PASS = 8
+RADIX_SORT_PASSES = SORTING_KEY_BITS // RADIX_BITS_PER_PASS
 
 DTYPE_FORMATS = {
     "float32": "f",
@@ -85,6 +92,10 @@ def mask_cumsum(mask: Iterable[int]) -> tuple[int, ...]:
 
 def where_indices(mask: Iterable[int]) -> tuple[int, ...]:
     return tuple(index for index, value in enumerate(mask) if value > 0)
+
+
+def sorted_indices_by_key(keys: tuple[int, ...]) -> tuple[int, ...]:
+    return tuple(sorted(range(len(keys)), key=lambda index: keys[index]))
 
 
 def buffer_data(name: str, dtype: str, values: Iterable[int | float], epsilon: float | None = None) -> BufferData:
@@ -177,12 +188,76 @@ def where_case(stage_name: str, mask: Iterable[int], initial_fill: int, notes: s
     )
 
 
+def radix_sort_case(stage_name: str, keys: Iterable[int], notes: str) -> FixtureCase:
+    key_values = tuple(keys)
+    if not key_values:
+        raise ValueError(f"{stage_name}: radix sort fixtures must contain at least one key")
+    if any(key < 0 or key > 0xFFFFFFFF for key in key_values):
+        raise ValueError(f"{stage_name}: uint32 radix sort key out of range")
+
+    indices = tuple(range(len(key_values)))
+    sorted_source_indices = sorted_indices_by_key(key_values)
+    sorted_keys = tuple(key_values[index] for index in sorted_source_indices)
+    sorted_gauss_idx = tuple(indices[index] for index in sorted_source_indices)
+    num_parts = (len(key_values) + RADIX_PARTITION_SIZE - 1) // RADIX_PARTITION_SIZE
+
+    return FixtureCase(
+        stage_name=stage_name,
+        subgraph="radix_sort",
+        fixture_bindings=(
+            "sorting_keys_1",
+            "sorting_gauss_idx_1",
+            "sorting_keys_2",
+            "sorting_gauss_idx_2",
+            "_sorting_histogram",
+            "_sorting_histogram_cumsum",
+        ),
+        fixture_buffers=(
+            buffer_data("sorting_keys_1", "uint32", key_values),
+            buffer_data("sorting_gauss_idx_1", "uint32", indices),
+            buffer_data("sorting_keys_2", "uint32", [0] * len(key_values)),
+            buffer_data("sorting_gauss_idx_2", "uint32", [0] * len(key_values)),
+            buffer_data("_sorting_histogram", "uint32", [0] * (RADIX_SORT_PASSES * RADIX_SORT_RADIX)),
+            buffer_data("_sorting_histogram_cumsum", "uint32", [0] * (num_parts * RADIX_SORT_RADIX)),
+        ),
+        golden_bindings=("sorted_keys", "sorted_gauss_idx"),
+        golden_buffers=(
+            buffer_data("sorted_keys", "uint32", sorted_keys),
+            buffer_data("sorted_gauss_idx", "uint32", sorted_gauss_idx),
+        ),
+        fixture_notes=f"Synthetic radix sort fixture for {notes}",
+        golden_notes=f"Synthetic radix sort golden for {notes}",
+    )
+
+
 def fixture_cases() -> tuple[FixtureCase, ...]:
     near_block_values = tuple((index % 7) - 3 for index in range(CUMSUM_BLOCK_SIZE - 1))
     exact_block_values = tuple(1 for _ in range(CUMSUM_BLOCK_SIZE))
     multi_block_values = tuple((index % 11) - 5 for index in range(CUMSUM_BLOCK_SIZE + 1))
     two_level_values = tuple((index % 5) - 2 for index in range((CUMSUM_BLOCK_SIZE * CUMSUM_BLOCK_SIZE) + 1))
     where_boundary_mask = tuple(1 if index in (WHERE_BLOCK_SIZE - 1, WHERE_BLOCK_SIZE) else 0 for index in range(WHERE_BLOCK_SIZE + 1))
+    single_partition_keys = (
+        0xFFFFFFFF,
+        0x00000000,
+        0x01000000,
+        0x000000FF,
+        0x0000FF00,
+        0x00FF0000,
+        0x80000000,
+        0x7FFFFFFF,
+        0x12345678,
+        0x12345670,
+        0x00000001,
+        0xABCDEF01,
+    )
+    partition_boundary_keys = tuple(((index * 1103515245 + 12345) & 0xFFFFFFFF) for index in range(RADIX_PARTITION_SIZE))
+    multi_partition_keys = tuple(
+        (((RADIX_PARTITION_SIZE - index) * 2654435761) ^ (index * 97)) & 0xFFFFFFFF
+        for index in range(RADIX_PARTITION_SIZE + 1)
+    )
+    duplicate_keys = (17, 4, 17, 9, 4, 17, 9, 4, 0, 17, 0, 9)
+    sorted_keys = tuple(index * 65537 for index in range(64))
+    reverse_keys = tuple(reversed(sorted_keys))
 
     return (
         FixtureCase(
@@ -223,6 +298,13 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         where_case("D_where_no_true", [0, 0, 0, 0], -1, "where shader no-true-mask testing"),
         where_case("D_where_first_last", [1, 0, 0, 0, 1], -1, "where shader first-last-mask testing"),
         where_case("D_where_block_boundary", where_boundary_mask, -1, "where shader block-boundary testing"),
+        radix_sort_case("radix_sort_minimum_one", [7], "one-element edge dispatch"),
+        radix_sort_case("radix_sort_single_partition", single_partition_keys, "single-partition mixed-key sorting"),
+        radix_sort_case("radix_sort_partition_boundary", partition_boundary_keys, "exact partition-size sorting"),
+        radix_sort_case("radix_sort_multi_partition", multi_partition_keys, "multi-partition sorting"),
+        radix_sort_case("radix_sort_duplicates", duplicate_keys, "duplicate-key stable sorting"),
+        radix_sort_case("radix_sort_sorted", sorted_keys, "already-sorted input"),
+        radix_sort_case("radix_sort_reverse", reverse_keys, "reverse-sorted input"),
     )
 
 

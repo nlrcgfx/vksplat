@@ -59,9 +59,19 @@ Block-size mirrors, boundary input-size formulas, and the fixture catalog summar
 live in the [rewrite testing report](../next/nlrc_vksplat/docs/testing-report.md#generated-data-assumptions).
 This README keeps per-stage buffer values and shader targets in the catalog below.
 
+Current radix sort fixture assumptions mirror `nlrc_vksplat_config.hpp`:
+
+- `SORTING_KEY_BITS = 32`
+- `RADIX_SORT_RADIX = 256`
+- `RADIX_BITS_PER_PASS = 8`
+- `RADIX_WORKGROUP_SIZE = 512`
+- `RADIX_PARTITION_DIVISION = 8`
+- `RADIX_PARTITION_SIZE = 4096`
+
 ## When Block Sizes Change
 
-Treat any change to `VKSPLAT_*_BLOCK_SIZE` as a fixture catalog change:
+Treat any change to `VKSPLAT_*_BLOCK_SIZE`, `VKSPLAT_RADIX_*`, or
+`VKSPLAT_SORTING_KEY_BITS` as a fixture catalog change:
 
 1. Update the mirrored constants in `test_data/generate_fixtures.py`.
 2. Regenerate generated files:
@@ -96,9 +106,19 @@ python test_data\generate_fixtures.py --check
 | `D_where_no_true` | `where` GPU utility shader | all-zero mask, sentinel output `[-1]` | `[-1]` | No-write path leaves output unchanged. |
 | `D_where_first_last` | `where` GPU utility shader | true values at first and last positions | `[0, 4]` | Boundary index handling for `gid == 0` and final element. |
 | `D_where_block_boundary` | `where` GPU utility shader | true values at `W - 1` and `W`, currently 255 and 256 | `[W - 1, W]` | Dispatch behavior across `VKSPLAT_WHERE_BLOCK_SIZE`. |
+| `radix_sort_minimum_one` | `radix_sort/upsweep` -> `spine` -> `downsweep` GPU pipeline | one `uint32` key `[7]`, one index `[0]` | stable sorted key/index pair | Minimum non-empty sort dispatch. |
+| `radix_sort_single_partition` | full radix sort pipeline | 12 mixed `uint32` keys across low and high bytes | CPU stable-sort by key | One partition, four 8-bit passes, ping-pong buffers. |
+| `radix_sort_partition_boundary` | full radix sort pipeline | `P` generated keys, currently 4096 | CPU stable-sort by key | Exact `VKSPLAT_RADIX_PARTITION_SIZE` boundary. |
+| `radix_sort_multi_partition` | full radix sort pipeline | `P + 1` generated keys, currently 4097 | CPU stable-sort by key | `num_parts > 1` upsweep/downsweep dispatch. |
+| `radix_sort_duplicates` | full radix sort pipeline | duplicate-key sequence `[17, 4, 17, 9, 4, 17, 9, 4, 0, 17, 0, 9]` | CPU stable-sort by key | Duplicate-key stability and histogram correctness. |
+| `radix_sort_sorted` | full radix sort pipeline | 64 already-sorted generated keys | unchanged stable sorted keys/indices | Regression guard for sorted input. |
+| `radix_sort_reverse` | full radix sort pipeline | 64 reverse-sorted generated keys | CPU stable-sort by key | Regression guard for reverse-sorted input. |
 
 The utility shader fixtures are synthetic Subgraph D cases. They validate isolated
-dispatch behavior before larger ref-parity fixtures are added.
+dispatch behavior before larger ref-parity fixtures are added. The radix sort
+fixtures validate the isolated Phase 2 sort pipeline. Their manifests list the
+working buffers, while per-pass descriptor order is asserted in `test_radix_sort.cpp`
+from the binding contract in `ref/docs/shader-pipeline.md`.
 
 ## Manifest Schema
 

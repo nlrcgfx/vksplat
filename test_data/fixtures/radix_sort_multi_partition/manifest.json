@@ -1,0 +1,54 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "radix_sort_multi_partition",
+  "subgraph": "radix_sort",
+  "bindings": [
+    "sorting_keys_1",
+    "sorting_gauss_idx_1",
+    "sorting_keys_2",
+    "sorting_gauss_idx_2",
+    "_sorting_histogram",
+    "_sorting_histogram_cumsum"
+  ],
+  "buffers": {
+    "sorting_keys_1": "sorting_keys_1.bin",
+    "sorting_gauss_idx_1": "sorting_gauss_idx_1.bin",
+    "sorting_keys_2": "sorting_keys_2.bin",
+    "sorting_gauss_idx_2": "sorting_gauss_idx_2.bin",
+    "_sorting_histogram": "_sorting_histogram.bin",
+    "_sorting_histogram_cumsum": "_sorting_histogram_cumsum.bin"
+  },
+  "shapes": {
+    "sorting_keys_1": [
+      4097
+    ],
+    "sorting_gauss_idx_1": [
+      4097
+    ],
+    "sorting_keys_2": [
+      4097
+    ],
+    "sorting_gauss_idx_2": [
+      4097
+    ],
+    "_sorting_histogram": [
+      1024
+    ],
+    "_sorting_histogram_cumsum": [
+      512
+    ]
+  },
+  "dtypes": {
+    "sorting_keys_1": "uint32",
+    "sorting_gauss_idx_1": "uint32",
+    "sorting_keys_2": "uint32",
+    "sorting_gauss_idx_2": "uint32",
+    "_sorting_histogram": "uint32",
+    "_sorting_histogram_cumsum": "uint32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "notes": "Synthetic radix sort fixture for multi-partition sorting"
+}

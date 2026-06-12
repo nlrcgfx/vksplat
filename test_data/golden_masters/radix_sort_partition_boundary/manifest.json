@@ -1,0 +1,30 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "radix_sort_partition_boundary",
+  "subgraph": "radix_sort",
+  "bindings": [
+    "sorted_keys",
+    "sorted_gauss_idx"
+  ],
+  "buffers": {
+    "sorted_keys": "sorted_keys.bin",
+    "sorted_gauss_idx": "sorted_gauss_idx.bin"
+  },
+  "shapes": {
+    "sorted_keys": [
+      4096
+    ],
+    "sorted_gauss_idx": [
+      4096
+    ]
+  },
+  "dtypes": {
+    "sorted_keys": "uint32",
+    "sorted_gauss_idx": "uint32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "notes": "Synthetic radix sort golden for exact partition-size sorting"
+}
