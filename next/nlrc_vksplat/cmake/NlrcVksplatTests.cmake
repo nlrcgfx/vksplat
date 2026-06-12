@@ -90,6 +90,7 @@ function(nlrc_vksplat_setup_tests)
     tests/test_gpu_smoke.cpp
     tests/test_manifest_profile.cpp
     tests/test_shader_config_profile.cpp
+    tests/test_utility_shaders.cpp
     tests/support/fixture_manifest.cpp
     tests/support/fixture_loader.cpp
     tests/support/golden_compare.cpp

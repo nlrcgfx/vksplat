@@ -17,7 +17,9 @@ namespace nlrc::vksplat::tests {
 [[nodiscard]] std::filesystem::path golden_dir(const std::string &stage_folder);
 
 [[nodiscard]] std::vector<std::uint8_t> load_binary_file(const std::filesystem::path &path);
+
 [[nodiscard]] const BufferSpec &buffer_spec(const FixtureManifest &manifest, const std::string &buffer_name);
+
 [[nodiscard]] std::size_t buffer_element_count(const BufferSpec &spec);
 
 template <typename T>
@@ -25,9 +27,9 @@ template <typename T>
                                                  const FixtureManifest &manifest,
                                                  const std::string &buffer_name) {
   const BufferSpec &spec = buffer_spec(manifest, buffer_name);
-  if (spec.dtype != BufferDtypeTraits<T>::value) {
+  if (spec.dtype != BufferDtypeTraits<T>::kValue) {
     throw std::runtime_error("Buffer dtype mismatch for " + buffer_name + ": manifest has " +
-                             buffer_dtype_name(spec.dtype) + ", loader requested " + BufferDtypeTraits<T>::name);
+                             buffer_dtype_name(spec.dtype) + ", loader requested " + BufferDtypeTraits<T>::kName);
   }
 
   const auto bytes = load_binary_file(fixture_root / spec.file);

@@ -69,6 +69,7 @@ FixtureManifest load_fixture_manifest(const std::filesystem::path &manifest_path
   }
 
   const nlohmann::json json = nlohmann::json::parse(input);
+
   FixtureManifest manifest;
   manifest.ref_baseline_tag = json.at("ref_baseline_tag").get<std::string>();
   manifest.stage_name = json.at("stage_name").get<std::string>();
@@ -108,9 +109,11 @@ FixtureManifest load_fixture_manifest(const std::filesystem::path &manifest_path
     }
 
     const auto epsilon_it = epsilons.find(name);
-    manifest.buffers.emplace(name,
-                             BufferSpec{file, shape_it->second, parse_buffer_dtype(dtype_it->second),
-                                        epsilon_it == epsilons.end() ? kDefaultFixtureEpsilon : epsilon_it->second});
+
+    BufferSpec buffer_spec = {file, shape_it->second, parse_buffer_dtype(dtype_it->second),
+                              epsilon_it == epsilons.end() ? kDefaultFixtureEpsilon : epsilon_it->second};
+
+    manifest.buffers.emplace(name, std::move(buffer_spec));
   }
 
   return manifest;

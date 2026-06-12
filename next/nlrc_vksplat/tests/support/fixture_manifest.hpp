@@ -11,7 +11,7 @@ namespace nlrc::vksplat::tests {
 
 inline constexpr double kDefaultFixtureEpsilon = 1e-5;
 
-enum class BufferDtype {
+enum class BufferDtype : std::uint8_t {
   Float32,
   UInt32,
   Int32,
@@ -47,26 +47,26 @@ struct BufferDtypeTraits;
 
 template <>
 struct BufferDtypeTraits<float> {
-  static constexpr BufferDtype value = BufferDtype::Float32;
-  static constexpr const char *name = "float32";
+  static constexpr BufferDtype kValue = BufferDtype::Float32;
+  static constexpr const char *kName = "float32";
 };
 
 template <>
 struct BufferDtypeTraits<std::uint32_t> {
-  static constexpr BufferDtype value = BufferDtype::UInt32;
-  static constexpr const char *name = "uint32";
+  static constexpr BufferDtype kValue = BufferDtype::UInt32;
+  static constexpr const char *kName = "uint32";
 };
 
 template <>
 struct BufferDtypeTraits<std::int32_t> {
-  static constexpr BufferDtype value = BufferDtype::Int32;
-  static constexpr const char *name = "int32";
+  static constexpr BufferDtype kValue = BufferDtype::Int32;
+  static constexpr const char *kName = "int32";
 };
 
 template <>
 struct BufferDtypeTraits<std::int64_t> {
-  static constexpr BufferDtype value = BufferDtype::Int64;
-  static constexpr const char *name = "int64";
+  static constexpr BufferDtype kValue = BufferDtype::Int64;
+  static constexpr const char *kName = "int64";
 };
 
 [[nodiscard]] FixtureManifest load_fixture_manifest(const std::filesystem::path &manifest_path);

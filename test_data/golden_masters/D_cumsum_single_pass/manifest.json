@@ -1,0 +1,20 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "D_cumsum_single_pass",
+  "subgraph": "D",
+  "bindings": ["output"],
+  "buffers": {
+    "output": "output.bin"
+  },
+  "shapes": {
+    "output": [5]
+  },
+  "dtypes": {
+    "output": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "notes": "Synthetic Subgraph D utility golden for cumsum_single_pass"
+}

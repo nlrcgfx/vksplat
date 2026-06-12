@@ -15,5 +15,5 @@
   "cmake_preset": "windows-debug",
   "emulate_int64": 0,
   "emulate_f32_atomic": 0,
-  "notes": "Synthetic harness fixture for gap #5 loader tests"
+  "notes": "Synthetic harness fixture for loader tests"
 }

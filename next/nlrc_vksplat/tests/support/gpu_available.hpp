@@ -11,7 +11,9 @@ enum class GpuTestPolicy : std::uint8_t {
 };
 
 [[nodiscard]] GpuTestPolicy gpu_test_policy();
+
 [[nodiscard]] bool gpu_available();
+
 void require_gpu_for_test();
 
 #define NLRC_REQUIRE_GPU() ::nlrc::vksplat::tests::require_gpu_for_test()
