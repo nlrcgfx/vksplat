@@ -1,11 +1,13 @@
 #pragma once
 
+#include <cstdint>
+
 namespace nlrc::vksplat::tests {
 
-enum class GpuTestPolicy : int {
-  kAuto = 0,
-  kRequire = 1,
-  kOff = 2,
+enum class GpuTestPolicy : std::uint8_t {
+  Auto = 0U,
+  Require = 1U,
+  Off = 2U,
 };
 
 [[nodiscard]] GpuTestPolicy gpu_test_policy();
