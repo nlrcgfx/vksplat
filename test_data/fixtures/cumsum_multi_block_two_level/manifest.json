@@ -1,0 +1,42 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "cumsum_multi_block_two_level",
+  "subgraph": "utility",
+  "bindings": [
+    "input",
+    "output",
+    "block_sums",
+    "block_sums2"
+  ],
+  "buffers": {
+    "input": "input.bin",
+    "output": "output.bin",
+    "block_sums": "block_sums.bin",
+    "block_sums2": "block_sums2.bin"
+  },
+  "shapes": {
+    "input": [
+      262145
+    ],
+    "output": [
+      262145
+    ],
+    "block_sums": [
+      513
+    ],
+    "block_sums2": [
+      2
+    ]
+  },
+  "dtypes": {
+    "input": "int32",
+    "output": "int32",
+    "block_sums": "int32",
+    "block_sums2": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "notes": "Synthetic utility fixture for two-level multi-block cumsum shader testing"
+}

@@ -1,0 +1,30 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "sum",
+  "subgraph": "utility",
+  "bindings": [
+    "input",
+    "output"
+  ],
+  "buffers": {
+    "input": "input.bin",
+    "output": "output.bin"
+  },
+  "shapes": {
+    "input": [
+      4
+    ],
+    "output": [
+      1
+    ]
+  },
+  "dtypes": {
+    "input": "int32",
+    "output": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "notes": "Synthetic utility fixture for isolated sum shader testing"
+}

@@ -31,7 +31,7 @@ repos:
         name: nlrc check large files
         entry: python tools/pre_commit_repo_hygiene.py large-files --max-kib 1024
         language: python
-        exclude: ^(ref/vksplat/contrib/.*\.(tar\.gz|zip)|test_data/(fixtures|golden_masters)/D_cumsum_multi_block_two_level/.*\.bin)$
+        exclude: ^(ref/vksplat/contrib/.*\.(tar\.gz|zip)|test_data/(fixtures|golden_masters)/cumsum_multi_block_two_level/.*\.bin)$
       - id: nlrc-check-json
         name: nlrc check JSON syntax
         entry: python tools/pre_commit_repo_hygiene.py json

@@ -134,17 +134,17 @@ constants above.
 | Fixture stage | Subgraph | Tag | Input size | Covered behavior |
 |---------------|----------|-----|------------|------------------|
 | `harness_smoke` | harness | `[host]` | 4 floats | Host manifest, loader, and compare plumbing |
-| `D_cumsum_single_pass` | D | `[gpu]` | 5 | Small signed inclusive prefix sum (`cumsum_single_pass`) |
-| `D_cumsum_single_pass_near_block` | D | `[gpu]` | `B - 1` | Single-pass cumsum just below `VKSPLAT_CUMSUM_BLOCK_SIZE` |
-| `D_cumsum_single_pass_exact_block` | D | `[gpu]` | `B` | Single-pass cumsum at `VKSPLAT_CUMSUM_BLOCK_SIZE` |
-| `D_cumsum_multi_block` | D | `[gpu]` | `B + 1` | One-level `block_scan` -> `scan_block_sums` -> `add_block_offsets` cumsum |
-| `D_cumsum_multi_block_two_level` | D | `[gpu]` | `B * B + 1` | Two-level cumsum path using `_cumsum_blockSums2` |
-| `D_sum` | D | `[gpu]` | 4 | Small integer reduction |
-| `D_sum_multi_block` | D | `[gpu]` | `S + 1` | Multi-workgroup sum with atomic accumulation |
-| `D_where` | D | `[gpu]` | 5 | Basic mask compaction |
-| `D_where_no_true` | D | `[gpu]` | 4 | No-write mask behavior preserves sentinel output |
-| `D_where_first_last` | D | `[gpu]` | 5 | First-element and last-element output indices |
-| `D_where_block_boundary` | D | `[gpu]` | `W + 1` | Workgroup boundary behavior around `VKSPLAT_WHERE_BLOCK_SIZE` |
+| `cumsum_single_pass` | utility | `[gpu]` | 5 | Small signed inclusive prefix sum (`cumsum_single_pass`) |
+| `cumsum_single_pass_near_block` | utility | `[gpu]` | `B - 1` | Single-pass cumsum just below `VKSPLAT_CUMSUM_BLOCK_SIZE` |
+| `cumsum_single_pass_exact_block` | utility | `[gpu]` | `B` | Single-pass cumsum at `VKSPLAT_CUMSUM_BLOCK_SIZE` |
+| `cumsum_multi_block` | utility | `[gpu]` | `B + 1` | One-level `block_scan` -> `scan_block_sums` -> `add_block_offsets` cumsum |
+| `cumsum_multi_block_two_level` | utility | `[gpu]` | `B * B + 1` | Two-level cumsum path using `_cumsum_blockSums2` |
+| `sum` | utility | `[gpu]` | 4 | Small integer reduction |
+| `sum_multi_block` | utility | `[gpu]` | `S + 1` | Multi-workgroup sum with atomic accumulation |
+| `where` | utility | `[gpu]` | 5 | Basic mask compaction |
+| `where_no_true` | utility | `[gpu]` | 4 | No-write mask behavior preserves sentinel output |
+| `where_first_last` | utility | `[gpu]` | 5 | First-element and last-element output indices |
+| `where_block_boundary` | utility | `[gpu]` | `W + 1` | Workgroup boundary behavior around `VKSPLAT_WHERE_BLOCK_SIZE` |
 | `radix_sort_minimum_one` | radix sort | `[gpu]` | 1 | Minimum non-empty sort dispatch |
 | `radix_sort_single_partition` | radix sort | `[gpu]` | 12 | Single-partition mixed-key sorting |
 | `radix_sort_partition_boundary` | radix sort | `[gpu]` | `P` | Exact `VKSPLAT_RADIX_PARTITION_SIZE` boundary |
@@ -154,7 +154,7 @@ constants above.
 | `radix_sort_reverse` | radix sort | `[gpu]` | 64 | Reverse-sorted input regression guard |
 
 Current fixture data is intentionally small, except for
-`D_cumsum_multi_block_two_level`, which uses the `B * B + 1` input size (`B` =
+`cumsum_multi_block_two_level`, which uses the `B * B + 1` input size (`B` =
 `CUMSUM_BLOCK_SIZE`); this is the minimum that crosses the second cumsum
 block-sums level.
 Large training dumps are avoided in git; curated reference-derived buffers should
@@ -169,7 +169,7 @@ checklist in [`test_data/README.md#when-block-sizes-change`](../../../test_data/
 
 Additional review items for this report:
 
-- Re-check generated binary sizes, especially `D_cumsum_multi_block_two_level`.
+- Re-check generated binary sizes, especially `cumsum_multi_block_two_level`.
 - Revisit `.pre-commit-config.yaml` large-file exceptions if the two-level fixture grows.
 - Update this document if boundary formulas or covered fixture stages change.
 - For radix changes, re-check pass count, partition histogram size, and whether 64-bit keys are now in scope.

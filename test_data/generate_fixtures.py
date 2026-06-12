@@ -108,7 +108,7 @@ def cumsum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCa
     expected = prefix_sum(input_values)
     return FixtureCase(
         stage_name=stage_name,
-        subgraph="D",
+        subgraph="utility",
         fixture_bindings=("input", "output", "block_sums"),
         fixture_buffers=(
             buffer_data("input", "int32", input_values),
@@ -117,8 +117,8 @@ def cumsum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCa
         ),
         golden_bindings=("output",),
         golden_buffers=(buffer_data("output", "int32", expected),),
-        fixture_notes=f"Synthetic Subgraph D utility fixture for {notes}",
-        golden_notes=f"Synthetic Subgraph D utility golden for {notes}",
+        fixture_notes=f"Synthetic utility fixture for {notes}",
+        golden_notes=f"Synthetic utility golden for {notes}",
     )
 
 
@@ -140,13 +140,13 @@ def cumsum_multi_block_case(stage_name: str, values: Iterable[int], notes: str, 
 
     return FixtureCase(
         stage_name=stage_name,
-        subgraph="D",
+        subgraph="utility",
         fixture_bindings=tuple(bindings),
         fixture_buffers=tuple(buffers),
         golden_bindings=("output",),
         golden_buffers=(buffer_data("output", "int32", expected),),
-        fixture_notes=f"Synthetic Subgraph D utility fixture for {notes}",
-        golden_notes=f"Synthetic Subgraph D utility golden for {notes}",
+        fixture_notes=f"Synthetic utility fixture for {notes}",
+        golden_notes=f"Synthetic utility golden for {notes}",
     )
 
 
@@ -154,7 +154,7 @@ def sum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCase:
     input_values = tuple(values)
     return FixtureCase(
         stage_name=stage_name,
-        subgraph="D",
+        subgraph="utility",
         fixture_bindings=("input", "output"),
         fixture_buffers=(
             buffer_data("input", "int32", input_values),
@@ -162,8 +162,8 @@ def sum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCase:
         ),
         golden_bindings=("output",),
         golden_buffers=(buffer_data("output", "int32", [sum(input_values)]),),
-        fixture_notes=f"Synthetic Subgraph D utility fixture for {notes}",
-        golden_notes=f"Synthetic Subgraph D utility golden for {notes}",
+        fixture_notes=f"Synthetic utility fixture for {notes}",
+        golden_notes=f"Synthetic utility golden for {notes}",
     )
 
 
@@ -174,7 +174,7 @@ def where_case(stage_name: str, mask: Iterable[int], initial_fill: int, notes: s
     expected = indices if indices else (initial_fill,)
     return FixtureCase(
         stage_name=stage_name,
-        subgraph="D",
+        subgraph="utility",
         fixture_bindings=("mask", "mask_cumsum", "out_indices"),
         fixture_buffers=(
             buffer_data("mask", "int32", mask_values),
@@ -183,8 +183,8 @@ def where_case(stage_name: str, mask: Iterable[int], initial_fill: int, notes: s
         ),
         golden_bindings=("out_indices",),
         golden_buffers=(buffer_data("out_indices", "int32", expected),),
-        fixture_notes=f"Synthetic Subgraph D utility fixture for {notes}",
-        golden_notes=f"Synthetic Subgraph D utility golden for {notes}",
+        fixture_notes=f"Synthetic utility fixture for {notes}",
+        golden_notes=f"Synthetic utility golden for {notes}",
     )
 
 
@@ -270,34 +270,34 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
             fixture_notes="Synthetic harness fixture for loader tests",
             golden_notes="Synthetic golden for harness compare helpers",
         ),
-        cumsum_case("D_cumsum_single_pass", [3, 0, -2, 5, 1], "isolated cumsum_single_pass shader testing"),
+        cumsum_case("cumsum_single_pass", [3, 0, -2, 5, 1], "isolated cumsum_single_pass shader testing"),
         cumsum_case(
-            "D_cumsum_single_pass_near_block",
+            "cumsum_single_pass_near_block",
             near_block_values,
             "near-block cumsum_single_pass shader testing",
         ),
         cumsum_case(
-            "D_cumsum_single_pass_exact_block",
+            "cumsum_single_pass_exact_block",
             exact_block_values,
             "exact-block cumsum_single_pass shader testing",
         ),
         cumsum_multi_block_case(
-            "D_cumsum_multi_block",
+            "cumsum_multi_block",
             multi_block_values,
             "multi-block cumsum shader testing",
         ),
         cumsum_multi_block_case(
-            "D_cumsum_multi_block_two_level",
+            "cumsum_multi_block_two_level",
             two_level_values,
             "two-level multi-block cumsum shader testing",
             two_level=True,
         ),
-        sum_case("D_sum", [1, 0, 2, 3], "isolated sum shader testing"),
-        sum_case("D_sum_multi_block", [1] * (SUM_BLOCK_SIZE + 1), "multi-block sum shader testing"),
-        where_case("D_where", [0, 1, 0, 1, 1], 0, "isolated where shader testing"),
-        where_case("D_where_no_true", [0, 0, 0, 0], -1, "where shader no-true-mask testing"),
-        where_case("D_where_first_last", [1, 0, 0, 0, 1], -1, "where shader first-last-mask testing"),
-        where_case("D_where_block_boundary", where_boundary_mask, -1, "where shader block-boundary testing"),
+        sum_case("sum", [1, 0, 2, 3], "isolated sum shader testing"),
+        sum_case("sum_multi_block", [1] * (SUM_BLOCK_SIZE + 1), "multi-block sum shader testing"),
+        where_case("where", [0, 1, 0, 1, 1], 0, "isolated where shader testing"),
+        where_case("where_no_true", [0, 0, 0, 0], -1, "where shader no-true-mask testing"),
+        where_case("where_first_last", [1, 0, 0, 0, 1], -1, "where shader first-last-mask testing"),
+        where_case("where_block_boundary", where_boundary_mask, -1, "where shader block-boundary testing"),
         radix_sort_case("radix_sort_minimum_one", [7], "one-element edge dispatch"),
         radix_sort_case("radix_sort_single_partition", single_partition_keys, "single-partition mixed-key sorting"),
         radix_sort_case("radix_sort_partition_boundary", partition_boundary_keys, "exact partition-size sorting"),

@@ -114,7 +114,7 @@ TEST_CASE("Typed fixture loader rejects dtype and size mismatches", "[host]") {
 }
 
 TEST_CASE("Typed fixture loader preserves little-endian int32 values", "[host]") {
-  const auto root = nlrc::vksplat::tests::fixture_dir("D_sum");
+  const auto root = nlrc::vksplat::tests::fixture_dir("sum");
   const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(root / "manifest.json");
 
   const auto bytes = nlrc::vksplat::tests::load_binary_file(root / "input.bin");

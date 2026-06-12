@@ -91,9 +91,9 @@ TEST_CASE("Dispatch cumsum single-pass utility shader", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
   const std::array<const char *, 3> cases = {
-      "D_cumsum_single_pass",
-      "D_cumsum_single_pass_near_block",
-      "D_cumsum_single_pass_exact_block",
+      "cumsum_single_pass",
+      "cumsum_single_pass_near_block",
+      "cumsum_single_pass_exact_block",
   };
 
   for (const auto *stage_name : cases) {
@@ -157,8 +157,8 @@ TEST_CASE("Dispatch cumsum multi-block utility shader", "[gpu]") {
   };
 
   const std::array<CumsumCase, 2> cases = {
-      CumsumCase{"D_cumsum_multi_block", false},
-      CumsumCase{"D_cumsum_multi_block_two_level", true},
+      CumsumCase{"cumsum_multi_block", false},
+      CumsumCase{"cumsum_multi_block_two_level", true},
   };
 
   for (const auto &test_case : cases) {
@@ -253,8 +253,8 @@ TEST_CASE("Dispatch sum utility shader", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
   const std::array<const char *, 2> cases = {
-      "D_sum",
-      "D_sum_multi_block",
+      "sum",
+      "sum_multi_block",
   };
 
   for (const auto *stage_name : cases) {
@@ -305,10 +305,10 @@ TEST_CASE("Dispatch where utility shader", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
   const std::array<const char *, 4> cases = {
-      "D_where",
-      "D_where_no_true",
-      "D_where_first_last",
-      "D_where_block_boundary",
+      "where",
+      "where_no_true",
+      "where_first_last",
+      "where_block_boundary",
   };
 
   for (const auto *stage_name : cases) {
