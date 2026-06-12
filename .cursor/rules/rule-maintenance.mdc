@@ -1,0 +1,26 @@
+---
+description: Keep Cursor rules synchronized with durable project changes
+alwaysApply: true
+---
+
+# Rule Maintenance
+
+Update `.cursor/rules/` when a durable project change makes an existing rule stale, incomplete, or misleading. Do not update rules for transient implementation details, one-off experiments, or local-only state.
+
+## Update Axes
+
+Check rule impact when changing:
+
+- Architecture/API: core abstractions, renamed wrappers, module ownership, public test/support APIs.
+- Build/tooling: CMake targets, presets, lint/pre-commit workflow, dependency fetching, generated artifacts, compiler requirements.
+- Shaders/config: shader source layout, generated header flow, profile propagation, config constants, SPIR-V embedding policy.
+- Testing/fixtures: test categories, fixture generator, golden policy, CTest registration, GPU policy, `testing-report.md` coverage status.
+- Porting/contracts: stage gates, buffer bindings, dispatch shape, push constants, ref parity workflow.
+- Platform constraints: OHOS/Maleoon constraints, Vulkan feature assumptions, emulation flags, subgroup/atomic/int64 policy.
+- Repo safety/git: do-not-stage paths, generated outputs, local editor files, commit workflow, directory boundaries.
+- Coding style: naming, C++ standard assumptions, lint source of truth, allowed macros, generated-code rules.
+- Docs/source of truth: README, `testing-report.md`, `test_data/README.md`, ref docs, or any rule-owned doc relationship.
+
+## Response Rule
+
+When relevant, state whether rules were updated. If rules were not updated after a durable change, state why no rule changed.
