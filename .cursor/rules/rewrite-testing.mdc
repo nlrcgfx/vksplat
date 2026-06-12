@@ -66,8 +66,9 @@ Per-dispatch workflow: load fixture, upload `StorageBuffer`, bind `StorageBindin
 1. Add a minimal fixture under `test_data/fixtures/<subgraph>_<stage>/`.
 2. Add invariant Catch2 tests where applicable.
 3. Add golden parity tests loading `test_data/golden_masters/...`.
-4. Implement the stage in `next/nlrc_vksplat/` until both pass.
-5. Only then integrate into the parent subgraph or training path.
+4. Document the fixture and golden meaning in `test_data/README.md`, including exact values for small synthetic buffers.
+5. Implement the stage in `next/nlrc_vksplat/` until both pass.
+6. Only then integrate into the parent subgraph or training path.
 
 ## test_data Layout
 
@@ -92,6 +93,8 @@ Each `manifest.json` records:
 - for goldens, optional `vkbd_source` and per-buffer `epsilon`
 
 Default profile is `windows-debug` with both emulate flags `0`.
+
+Use `test_data/README.md` as the fixture catalog. Add per-fixture Markdown only when a future large ref-generated fixture cannot be summarized clearly in the central README.
 
 ## Fixture Sources
 
