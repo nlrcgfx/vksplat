@@ -5,6 +5,8 @@ set_property(CACHE NLRC_VKSPLAT_GPU_TESTS PROPERTY STRINGS AUTO REQUIRE OFF)
 set(NLRC_VKSPLAT_TEST_DATA_DIR "${PROJECT_SOURCE_DIR}/../../test_data" CACHE PATH
     "Root directory for fixture and golden test data")
 
+set(NLRC_VKSPLAT_FIXTURE_GENERATOR "${NLRC_VKSPLAT_TEST_DATA_DIR}/generate_fixtures.py")
+
 set(NLRC_VKSPLAT_DEP_ARCHIVE_DIR "${PROJECT_SOURCE_DIR}/contrib" CACHE PATH
     "Directory containing optional local dependency archives")
 
@@ -80,6 +82,7 @@ add_executable(nlrc_vksplat_tests)
 target_sources(nlrc_vksplat_tests
   PRIVATE
     test_main.cpp
+    test_fixture_catalog.cpp
     test_fixture_loader.cpp
     test_golden_compare.cpp
     test_gpu_smoke.cpp
@@ -107,5 +110,10 @@ endif()
 include(Catch)
 catch_discover_tests(nlrc_vksplat_tests DISCOVERY_MODE PRE_TEST)
 
-add_test(NAME nlrc_vksplat_tests COMMAND nlrc_vksplat_tests)
-set_tests_properties(nlrc_vksplat_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+add_test(
+  NAME nlrc_vksplat_fixture_generation_check
+  COMMAND ${Python_EXECUTABLE} ${NLRC_VKSPLAT_FIXTURE_GENERATOR} --check
+)
+set_tests_properties(nlrc_vksplat_fixture_generation_check PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+)

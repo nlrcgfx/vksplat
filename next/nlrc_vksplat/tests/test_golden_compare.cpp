@@ -52,3 +52,10 @@ TEST_CASE("NaN detection rejects non-finite values", "[host]") {
 
   REQUIRE_THROWS_AS(nlrc::vksplat::tests::assert_no_nan_inf(values_span), std::runtime_error);
 }
+
+TEST_CASE("Infinity detection rejects non-finite values", "[host]") {
+  const std::vector<float> values{1.0F, std::numeric_limits<float>::infinity()};
+  auto values_span = nlrc::vksplat::make_span(values);
+
+  REQUIRE_THROWS_AS(nlrc::vksplat::tests::assert_no_nan_inf(values_span), std::runtime_error);
+}

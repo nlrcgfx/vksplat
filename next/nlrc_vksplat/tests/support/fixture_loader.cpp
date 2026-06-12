@@ -36,6 +36,14 @@ namespace nlrc::vksplat::tests {
 }
 
 [[nodiscard]] std::size_t buffer_element_count(const BufferSpec &spec) {
+  if (spec.shape.empty()) {
+    throw std::runtime_error("Buffer shape must not be empty");
+  }
+  for (const auto dim : spec.shape) {
+    if (dim == 0) {
+      throw std::runtime_error("Buffer shape dimensions must be positive");
+    }
+  }
   return std::accumulate(spec.shape.begin(), spec.shape.end(), std::size_t{1}, std::multiplies<>());
 }
 

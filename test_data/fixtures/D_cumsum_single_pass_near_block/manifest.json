@@ -1,6 +1,6 @@
 {
   "ref_baseline_tag": "ref-baseline-2026-06-12",
-  "stage_name": "D_cumsum_single_pass",
+  "stage_name": "D_cumsum_single_pass_near_block",
   "subgraph": "D",
   "bindings": [
     "input",
@@ -14,10 +14,10 @@
   },
   "shapes": {
     "input": [
-      5
+      511
     ],
     "output": [
-      5
+      511
     ],
     "block_sums": [
       1
@@ -32,5 +32,5 @@
   "emulate_int64": 0,
   "emulate_f32_atomic": 0,
   "vkbd_source": "synthetic",
-  "notes": "Synthetic Subgraph D utility fixture for isolated cumsum_single_pass shader testing"
+  "notes": "Synthetic Subgraph D utility fixture for near-block cumsum_single_pass shader testing"
 }

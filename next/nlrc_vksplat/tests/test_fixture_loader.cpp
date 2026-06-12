@@ -1,11 +1,50 @@
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
+#include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
+
+namespace {
+
+struct TemporaryFile final {
+  explicit TemporaryFile(std::filesystem::path file_path) : path(std::move(file_path)) {}
+
+  TemporaryFile(const TemporaryFile &) = delete;
+  TemporaryFile &operator=(const TemporaryFile &) = delete;
+
+  TemporaryFile(TemporaryFile &&) = delete;
+  TemporaryFile &operator=(TemporaryFile &&) = delete;
+
+  ~TemporaryFile() {
+    std::error_code error;
+    std::filesystem::remove(path, error);
+  }
+
+  std::filesystem::path path;
+};
+
+[[nodiscard]] TemporaryFile write_temp_manifest(const std::string &contents) {
+  const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+  auto path = std::filesystem::temp_directory_path() / ("nlrc_vksplat_manifest_" + std::to_string(timestamp) + ".json");
+
+  std::ofstream output(path);
+  if (!output) {
+    throw std::runtime_error("Failed to write temporary manifest: " + path.string());
+  }
+  output << contents;
+  return TemporaryFile(path);
+}
+
+} // namespace
 
 TEST_CASE("Load harness_smoke fixture manifest metadata", "[host]") {
   const auto root = nlrc::vksplat::tests::fixture_dir("harness_smoke");
@@ -57,9 +96,69 @@ TEST_CASE("Typed fixture loader rejects dtype and size mismatches", "[host]") {
   const auto root = nlrc::vksplat::tests::fixture_dir("harness_smoke");
   auto manifest = nlrc::vksplat::tests::load_fixture_manifest(root / "manifest.json");
 
+  REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_buffer<float>(root, manifest, "missing"), std::runtime_error);
+
   REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_buffer<std::uint32_t>(root, manifest, "input_a"),
                     std::runtime_error);
 
+  manifest.buffers.at("input_a").file = "missing.bin";
+  REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_buffer<float>(root, manifest, "input_a"), std::runtime_error);
+
+  manifest = nlrc::vksplat::tests::load_fixture_manifest(root / "manifest.json");
+  manifest.buffers.at("input_a").shape = {};
+  REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_buffer<float>(root, manifest, "input_a"), std::runtime_error);
+
+  manifest = nlrc::vksplat::tests::load_fixture_manifest(root / "manifest.json");
   manifest.buffers.at("input_a").shape = {5};
   REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_buffer<float>(root, manifest, "input_a"), std::runtime_error);
+}
+
+TEST_CASE("Typed fixture loader preserves little-endian int32 values", "[host]") {
+  const auto root = nlrc::vksplat::tests::fixture_dir("D_sum");
+  const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(root / "manifest.json");
+
+  const auto bytes = nlrc::vksplat::tests::load_binary_file(root / "input.bin");
+  const std::vector<std::uint8_t> expected_bytes = {
+      1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0,
+  };
+  REQUIRE(bytes == expected_bytes);
+
+  const auto values = nlrc::vksplat::tests::load_fixture_buffer<std::int32_t>(root, manifest, "input");
+  REQUIRE(values == std::vector<std::int32_t>{1, 0, 2, 3});
+}
+
+TEST_CASE("Fixture manifest loader rejects malformed JSON", "[host]") {
+  const auto manifest_file = write_temp_manifest("{not json");
+  REQUIRE_THROWS(nlrc::vksplat::tests::load_fixture_manifest(manifest_file.path));
+}
+
+TEST_CASE("Fixture manifest loader rejects invalid dtype and shape metadata", "[host]") {
+  const auto invalid_dtype = write_temp_manifest(R"({
+    "ref_baseline_tag": "ref-baseline-2026-06-12",
+    "stage_name": "bad",
+    "subgraph": "test",
+    "bindings": ["input"],
+    "buffers": {"input": "input.bin"},
+    "shapes": {"input": [1]},
+    "dtypes": {"input": "float16"},
+    "cmake_preset": "windows-debug",
+    "emulate_int64": 0,
+    "emulate_f32_atomic": 0
+  })");
+
+  REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_manifest(invalid_dtype.path), std::invalid_argument);
+
+  const auto empty_shape = write_temp_manifest(R"({
+    "ref_baseline_tag": "ref-baseline-2026-06-12",
+    "stage_name": "bad",
+    "subgraph": "test",
+    "bindings": ["input"],
+    "buffers": {"input": "input.bin"},
+    "shapes": {"input": []},
+    "dtypes": {"input": "int32"},
+    "cmake_preset": "windows-debug",
+    "emulate_int64": 0,
+    "emulate_f32_atomic": 0
+  })");
+  REQUIRE_THROWS_AS(nlrc::vksplat::tests::load_fixture_manifest(empty_shape.path), std::runtime_error);
 }

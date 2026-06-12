@@ -7,7 +7,9 @@
     "output_a": "output_a.bin"
   },
   "shapes": {
-    "output_a": [4]
+    "output_a": [
+      4
+    ]
   },
   "dtypes": {
     "output_a": "float32"
@@ -17,7 +19,7 @@
   "emulate_f32_atomic": 0,
   "vkbd_source": "synthetic",
   "epsilon": {
-    "output_a": 1e-5
+    "output_a": 1e-05
   },
   "notes": "Synthetic golden for harness compare helpers"
 }

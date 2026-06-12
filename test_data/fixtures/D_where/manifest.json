@@ -2,16 +2,26 @@
   "ref_baseline_tag": "ref-baseline-2026-06-12",
   "stage_name": "D_where",
   "subgraph": "D",
-  "bindings": ["mask", "mask_cumsum", "out_indices"],
+  "bindings": [
+    "mask",
+    "mask_cumsum",
+    "out_indices"
+  ],
   "buffers": {
     "mask": "mask.bin",
     "mask_cumsum": "mask_cumsum.bin",
     "out_indices": "out_indices.bin"
   },
   "shapes": {
-    "mask": [5],
-    "mask_cumsum": [5],
-    "out_indices": [3]
+    "mask": [
+      5
+    ],
+    "mask_cumsum": [
+      5
+    ],
+    "out_indices": [
+      3
+    ]
   },
   "dtypes": {
     "mask": "int32",

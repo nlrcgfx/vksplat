@@ -2,14 +2,21 @@
   "ref_baseline_tag": "ref-baseline-2026-06-12",
   "stage_name": "D_sum",
   "subgraph": "D",
-  "bindings": ["input", "output"],
+  "bindings": [
+    "input",
+    "output"
+  ],
   "buffers": {
     "input": "input.bin",
     "output": "output.bin"
   },
   "shapes": {
-    "input": [4],
-    "output": [1]
+    "input": [
+      4
+    ],
+    "output": [
+      1
+    ]
   },
   "dtypes": {
     "input": "int32",

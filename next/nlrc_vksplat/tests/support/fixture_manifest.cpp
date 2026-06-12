@@ -1,5 +1,6 @@
 #include "fixture_manifest.hpp"
 
+#include <cstdint>
 #include <fstream>
 #include <stdexcept>
 
@@ -9,9 +10,17 @@ namespace nlrc::vksplat::tests {
 namespace {
 
 [[nodiscard]] std::vector<std::size_t> parse_shape(const nlohmann::json &value) {
+  if (!value.is_array() || value.empty()) {
+    throw std::runtime_error("Buffer shape must be a non-empty array");
+  }
+
   std::vector<std::size_t> shape;
   for (const auto &dim : value) {
-    shape.push_back(dim.get<std::size_t>());
+    const auto parsed_dim = dim.get<std::int64_t>();
+    if (parsed_dim <= 0) {
+      throw std::runtime_error("Buffer shape dimensions must be positive");
+    }
+    shape.push_back(static_cast<std::size_t>(parsed_dim));
   }
   return shape;
 }

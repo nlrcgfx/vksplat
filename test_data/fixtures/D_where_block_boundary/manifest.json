@@ -1,24 +1,36 @@
 {
   "ref_baseline_tag": "ref-baseline-2026-06-12",
-  "stage_name": "D_where",
+  "stage_name": "D_where_block_boundary",
   "subgraph": "D",
   "bindings": [
+    "mask",
+    "mask_cumsum",
     "out_indices"
   ],
   "buffers": {
+    "mask": "mask.bin",
+    "mask_cumsum": "mask_cumsum.bin",
     "out_indices": "out_indices.bin"
   },
   "shapes": {
+    "mask": [
+      257
+    ],
+    "mask_cumsum": [
+      257
+    ],
     "out_indices": [
-      3
+      2
     ]
   },
   "dtypes": {
+    "mask": "int32",
+    "mask_cumsum": "int32",
     "out_indices": "int32"
   },
   "cmake_preset": "windows-debug",
   "emulate_int64": 0,
   "emulate_f32_atomic": 0,
   "vkbd_source": "synthetic",
-  "notes": "Synthetic Subgraph D utility golden for isolated where shader testing"
+  "notes": "Synthetic Subgraph D utility fixture for where shader block-boundary testing"
 }

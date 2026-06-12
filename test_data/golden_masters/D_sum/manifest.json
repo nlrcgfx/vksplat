@@ -2,12 +2,16 @@
   "ref_baseline_tag": "ref-baseline-2026-06-12",
   "stage_name": "D_sum",
   "subgraph": "D",
-  "bindings": ["output"],
+  "bindings": [
+    "output"
+  ],
   "buffers": {
     "output": "output.bin"
   },
   "shapes": {
-    "output": [1]
+    "output": [
+      1
+    ]
   },
   "dtypes": {
     "output": "int32"
@@ -16,5 +20,5 @@
   "emulate_int64": 0,
   "emulate_f32_atomic": 0,
   "vkbd_source": "synthetic",
-  "notes": "Synthetic Subgraph D utility golden for sum"
+  "notes": "Synthetic Subgraph D utility golden for isolated sum shader testing"
 }
