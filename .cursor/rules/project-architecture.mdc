@@ -3,7 +3,7 @@ description: nlrc-vksplat monorepo layout, targets, and reference docs
 alwaysApply: true
 ---
 
-# Project Architecture & Context
+# Project Architecture and Context
 
 Monorepo for VkSplat-based 3D Gaussian Splatting training research.
 
@@ -11,39 +11,49 @@ Monorepo for VkSplat-based 3D Gaussian Splatting training research.
 
 | Path | Role |
 |------|------|
-| `ref/` | Frozen reference VkSplat (read-only ground truth; baseline tag `ref-baseline-2026-06-12`) |
+| `ref/` | Frozen reference VkSplat, read-only ground truth at `ref-baseline-2026-06-12` |
 | `ref/vksplat/` | Reference CMake/Python project root |
-| `next/nlrc_vksplat/` | Clean-slate cross-platform rewrite (Phase 2 — all new work) |
-| `test_data/` | Shared regression assets and golden masters (Phase 2) |
-| `outputs/` | Training runs and buffer dumps (gitignored) |
+| `next/nlrc_vksplat/` | Clean-slate cross-platform rewrite; all new implementation work goes here |
+| `test_data/` | Shared regression fixtures and golden masters |
+| `outputs/` | Training runs and buffer dumps; gitignored |
 
-## Testing
+## Rewrite Verification
 
-Rewrite verification: Catch2 + CTest harness (`nlrc_vksplat_tests`), fixture-first isolated GPU tests with invariant + ref-parity oracles. See `rewrite-testing.mdc`. Buffer/binding parity: `rewrite-buffer-contract.mdc`. Port sequence: `rewrite-porting-order.mdc`. Error policy: `rewrite-error-handling.mdc`.
+- Catch2/CTest executable: `nlrc_vksplat_tests`.
+- Headless Vulkan substrate: `nlrc_vksplat_gpu`.
+- Fixture-first isolated GPU tests use invariant and ref-parity oracles.
+- Buffer/binding parity follows `rewrite-buffer-contract.mdc`.
+- Port order follows `rewrite-porting-order.mdc`.
+- Error policy follows `rewrite-error-handling.mdc`.
 
 ## Targets
 
-- **Windows x86_64** — MSVC or Clang via Ninja (`windows-debug` / `windows-release` in `next/nlrc_vksplat/CMakePresets.json`)
-- **OpenHarmony ARM64** — OHOS NDK via Clang (`ohos-debug` / `ohos-release` in `next/nlrc_vksplat/CMakePresets.json`)
+- Windows x86_64: MSVC or Clang via Ninja using `windows-debug` / `windows-release`.
+- OpenHarmony ARM64: OHOS NDK via Clang using `ohos-debug` / `ohos-release`.
+- Presets live in `next/nlrc_vksplat/CMakePresets.json`.
 
-## Compute stack
+## Compute Stack
 
-- Vulkan 1.2+
-- Slang for core compute pipelines
-- GLSL 460 for radix sort only (`glslc --target-env=vulkan1.2`)
+- Vulkan 1.2 baseline.
+- Slang for core compute pipelines.
+- GLSL 460 for radix sort only.
+- Embedded SPIR-V headers generated at CMake build time.
 
-## Class hierarchy (conceptual)
+## Current Rewrite Shape
 
-`VulkanGSPipeline` → `VulkanGSRenderer` → `VulkanGSTrainer`
+Current low-level rewrite abstractions are `HeadlessContext`, `StorageBuffer`, `ComputePipeline`, typed spans/views, and fixture/golden test helpers.
 
-## Config propagation
+Ref lineage is `VulkanGSPipeline -> VulkanGSRenderer -> VulkanGSTrainer`; treat that as reference context only, not current rewrite structure.
 
-**Rewrite:** `nlrc_vksplat_config.hpp` is SSOT; CMake profile options + `scripts/compile_shaders.py` emit embedded SPIR-V headers under `${CMAKE_BINARY_DIR}/generated/`. See `shader-build-embed.mdc`.
+## Config Propagation
 
-**Ref:** `vksplat_config.h` + runtime `.spv` load; see `ref/docs/shader-pipeline.md`.
+- Rewrite config source of truth: `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp`.
+- CMake profile options select only emulation profile flags.
+- `scripts/compile_shaders.py` emits generated config fragments and embedded SPIR-V headers under `${CMAKE_BINARY_DIR}/generated/`.
+- Ref config uses `vksplat_config.h` plus runtime `.spv` loading; do not copy that runtime loading model into the rewrite.
 
-## Authoritative docs
+## Authoritative Docs
 
-- `README.md` — repo overview
-- `ref/docs/shader-pipeline.md` — GPU stages, buffer I/O, subgraphs A–G
-- `ref/docs/ohos-maleoon910-porting-report.md` — OpenHarmony / Maleoon 910 constraints
+- `README.md`: repo overview and build entrypoints.
+- `ref/docs/shader-pipeline.md`: GPU stages, buffer I/O, and subgraphs A-G.
+- `ref/docs/ohos-maleoon910-porting-report.md`: OpenHarmony / Maleoon 910 constraints.

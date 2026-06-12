@@ -1,28 +1,34 @@
 ---
-description: Directory boundaries — ref is read-only, rewrite is isolated
+description: Directory boundaries - ref is read-only, rewrite is isolated
 alwaysApply: true
 ---
 
-# Directory & Structural Guardrails
+# Directory and Structural Guardrails
 
-## Ref is read-only
+## Ref Is Read-Only
 
-- Ground truth: `ref/vksplat/` (baseline tag `ref-baseline-2026-06-12`)
-- Use for behavior comparison, shader reference, and generating `.vkbd` golden dumps
-- **CRITICAL:** Never propose, write, or execute edits under `ref/` unless the user explicitly requests a critical baseline bugfix
-- Do not add features, refactors, or OHOS port work in `ref/`
+- Ground truth is `ref/vksplat/` at baseline tag `ref-baseline-2026-06-12`.
+- Use `ref/` for behavior comparison, shader reference, and generating `.vkbd` golden dumps.
+- Never propose, write, or execute edits under `ref/` unless the user explicitly requests a critical baseline bugfix.
+- Do not add features, refactors, or OHOS port work in `ref/`.
 
-## Rewrite boundary
+## Rewrite Boundary
 
-- All implementation lives in `next/nlrc_vksplat/`
-- `next/nlrc_vksplat/CMakeLists.txt` must remain fully decoupled from `ref/vksplat/CMakeLists.txt`
-- Never `add_subdirectory(../ref/...)` or link against `ref/vksplat` targets
+- All implementation lives in `next/nlrc_vksplat/`.
+- `next/nlrc_vksplat/CMakeLists.txt` must remain fully decoupled from `ref/vksplat/CMakeLists.txt`.
+- Never `add_subdirectory(../ref/...)` or link against `ref/vksplat` targets.
 
-## Shared assets
+## Shared Assets
 
-- Committed regression data: `test_data/` at repo root
-- Runtime training output: `outputs/` (gitignored)
+- Committed regression data lives in repo-root `test_data/`.
+- Runtime training output lives in `outputs/` and is gitignored.
 
-## Build artifacts
+## Do Not Stage Unless Explicitly Requested
 
-Do not stage: `ref/vksplat/build/`, `next/nlrc_vksplat/build/`, generated shader outputs, `.slangtorch_cache`, `__pycache__/`, or `CMakeUserPresets.json`. See `git-commits` rule for commit workflow.
+- Build outputs: `ref/vksplat/build/`, `next/nlrc_vksplat/build/`.
+- Generated shader outputs: `ref/vksplat/shader/generated/`, `next/nlrc_vksplat/build/*/generated/`.
+- Caches: `.slangtorch_cache`, `__pycache__/`.
+- Local presets: `CMakeUserPresets.json`.
+- Local editor tasks with machine paths: `.vscode/tasks.json`, unless sanitized as a shared/example file.
+
+See `git-commits.mdc` for commit workflow.

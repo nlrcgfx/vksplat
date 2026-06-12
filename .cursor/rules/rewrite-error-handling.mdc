@@ -6,43 +6,48 @@ alwaysApply: false
 
 # Rewrite Error Handling
 
-Applies to `next/nlrc_vksplat/`. Fail fast; no custom error-code taxonomy.
+Applies to `next/nlrc_vksplat/`. Fail fast inside the rewrite; do not add a custom error-code taxonomy unless a public API requires it later.
 
 ## Principles
 
-- Unrecoverable GPU/setup failures throw (ref behavior without `_THROW_ERROR`).
-- Never discard `VkResult` silently; use `[[nodiscard]]` wrappers.
-- Error payloads: `std::exception::what()` or `std::string` — no `enum class ErrorCode` unless product requires it later.
+- Unrecoverable GPU/setup failures throw exceptions.
+- Never discard `VkResult` silently.
+- Use error payloads from `std::exception::what()` or `std::string`.
+- Do not thread `tl::expected` through every internal Vulkan call.
 
-## Vulkan layer (internal)
+## Vulkan Layer
 
-When implementing Phase 0, add `check_vk(VkResult, const char* context)` in e.g. `src/vulkan_check.hpp`:
+- Use the existing `check_vk(VkResult, const char* context)` helper in `src/vulkan_check.hpp`.
+- On failure, `check_vk` throws `std::runtime_error` with context and numeric `VkResult`.
+- Call `check_vk` at every `vk*` site in pipeline/device code unless a documented alternate path exists.
+- Probe paths may intentionally handle `VkResult` directly when failure means "not available" rather than "fatal."
 
-- On failure, throw `std::runtime_error` with context and numeric `VkResult`.
-- Call at every `vk*` site in pipeline/device code unless a documented alternate path exists.
-- Do **not** thread `tl::expected` through every Vulkan call.
+## Contract Layer
 
-## Contract layer
+Use exceptions before Vulkan calls for wrapper contract violations:
 
-Binding count mismatch, null device buffer, push constant `sizeof > 192` → throw `std::logic_error` or `std::invalid_argument`. See `rewrite-buffer-contract.mdc`.
+- Invalid constructor inputs such as empty/null SPIR-V or push constants above `kMaxPushConstantBytes`: `std::invalid_argument`.
+- Binding count mismatch or null storage buffer binding: `std::invalid_argument`.
+- Dispatch with required storage buffers not bound: `std::logic_error`.
+- Push constant view size mismatch: `std::invalid_argument`.
 
-## Public API (deferred)
+## Public API Deferred
 
 When `apps/trainer` or session types are added:
 
-- `[[nodiscard]] tl::expected<void, std::string> forward()` / `train_step()` at the boundary.
-- Internals may throw; boundary catches `std::exception` and returns `tl::unexpected(e.what())`.
-- Vendor `tl::expected` when needed (C++17; `std::expected` is C++23).
+- Boundary APIs may return `tl::expected<void, std::string>`.
+- Internals may still throw; the boundary catches `std::exception` and returns `tl::unexpected(e.what())`.
+- Vendor `tl::expected` only when needed because the project is C++17.
 
-Until session API exists, setup code and Catch2 tests use exceptions only.
+Until a session API exists, setup code and Catch2 tests use exceptions only.
 
 ## Tests
 
-- Setup: `REQUIRE_NOTHROW` where pipeline init should succeed; GPU paths use `check_vk` via `nlrc_vksplat_gpu`.
-- Golden / invariant failures: `CHECK` / `REQUIRE` on data, not error-return paths.
-- Contract violations: optional `REQUIRE_THROWS`.
-- GPU AUTO skip: `[gpu]` tests use `NLRC_REQUIRE_GPU()` per `rewrite-testing.mdc`.
+- Setup success paths use `REQUIRE_NOTHROW` where useful.
+- Contract violations use `REQUIRE_THROWS_AS` with the expected standard exception type.
+- Golden and invariant failures use `CHECK` / `REQUIRE` on data, not error-return paths.
+- GPU AUTO skip uses `NLRC_REQUIRE_GPU()` per `rewrite-testing.mdc`.
 
 ## OHOS
 
-Exceptions are allowed with `c++_shared` (current presets). Revisit only if `-fno-exceptions` is required.
+Exceptions are allowed with the current `c++_shared` presets. Revisit only if `-fno-exceptions` becomes a hard requirement.

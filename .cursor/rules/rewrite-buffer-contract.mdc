@@ -8,51 +8,59 @@ alwaysApply: false
 
 Parity contract for rewrite dispatches and golden tests. Read before porting each kernel.
 
-## Authoritative sources
+## Authoritative Sources
 
 | What | Where |
-|------|--------|
-| Buffer field names and shapes | `ref/vksplat/src/buffer.h` — `VulkanGSPipelineBuffers` |
-| Per-kernel binding tables | `ref/docs/shader-pipeline.md` — subgraph sections + shader index |
-| C++ dispatch wiring | `ref/vksplat/src/gs_renderer.cpp`, `gs_trainer.cpp` — vector passed to `executeCompute` |
-| Config-dependent types | `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` — `RectTileSpace`, `SortingKey` vs `VKSPLAT_USE_EMULATED_INT64` |
+|------|-------|
+| Buffer field names and shapes | `ref/vksplat/src/buffer.h`, especially `VulkanGSPipelineBuffers` |
+| Per-kernel binding tables | `ref/docs/shader-pipeline.md`, subgraph sections and shader index |
+| Ref dispatch wiring | `ref/vksplat/src/gs_renderer.cpp`, `gs_trainer.cpp`, vectors passed to `executeCompute` |
+| Rewrite config-dependent types | `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` |
+| Rewrite dispatch API | `ComputePipeline`, `StorageBindingList`, `DispatchShape`, `PushConstantsView` |
 
-## Binding contract
+## Binding Contract
 
-Ref API: `executeCompute(dims, uniformsPtr, uniformSize, pipeline, buffers)`.
+Ref API terminology: `executeCompute(dims, uniformsPtr, uniformSize, pipeline, buffers)`.
 
-- `buffers[i]` → descriptor binding `i` (`VK_DESCRIPTOR_TYPE_STORAGE_BUFFER`).
-- Vector order must match the **Bind** column in `shader-pipeline.md` for that kernel — not alphabetical order, not `VulkanGSPipelineBuffers` member order.
-- Use `buffer.h` identifiers in docs, manifests, and tests (`xyz_ws`, `rect_tile_space`, …).
+Rewrite API terminology: bind `StorageBindingList`, then dispatch with `DispatchShape` and optional `PushConstantsView`.
 
-`projection_forward` example (bindings 0–10): `xyz_ws`, `sh_coeffs`, `rotations`, `scales_opacs`, `tiles_touched`, `rect_tile_space`, `radii`, `xy_vs`, `depths`, `inv_cov_vs_opacity`, `rgb`.
+- `buffers[i]` maps to descriptor binding `i` with `VK_DESCRIPTOR_TYPE_STORAGE_BUFFER`.
+- Vector order must match the Bind column in `shader-pipeline.md` for that kernel.
+- Do not sort bindings alphabetically.
+- Do not infer binding order from `VulkanGSPipelineBuffers` member order.
+- Use `buffer.h` identifiers in docs, manifests, and tests, such as `xyz_ws` and `rect_tile_space`.
+
+`projection_forward` example, bindings `0..10`:
+
+`xyz_ws`, `sh_coeffs`, `rotations`, `scales_opacs`, `tiles_touched`, `rect_tile_space`, `radii`, `xy_vs`, `depths`, `inv_cov_vs_opacity`, `rgb`.
 
 ```cpp
-// BAD — struct declaration order
-executeCompute(..., { scales_opacs, xyz_ws, ... });
+// BAD - struct declaration order
+pipeline.bind_storage_buffers({scales_opacs, xyz_ws});
 
-// GOOD — shader-pipeline.md Bind column order
-executeCompute(..., { xyz_ws, sh_coeffs, rotations, scales_opacs, tiles_touched, ... });
+// GOOD - shader-pipeline.md Bind column order
+pipeline.bind_storage_buffers({xyz_ws, sh_coeffs, rotations, scales_opacs});
 ```
 
-## Layout contract
+## Layout Contract
 
-| Ref (do not copy) | Rewrite |
-|-------------------|---------|
-| `PACK_STRUCT` | `alignas()` + `static_assert(sizeof)` |
-| Implicit packing | `std430` in C++ and Slang/GLSL |
+| Ref pattern to avoid | Rewrite pattern |
+|----------------------|-----------------|
+| `PACK_STRUCT` | `alignas()` plus `static_assert(sizeof(...))` |
+| Implicit packing | Explicit C++ and Slang/GLSL layout parity |
 
-- Push constants ≤ 192 bytes: `static_assert(sizeof(Uniforms) <= 192)`.
-- `rect_tile_space` may be `(N,)` or `(2N,)` when int64 is emulated — record profile flags in fixture manifests.
+- Push constants must be at or below `kMaxPushConstantBytes` / 192 bytes.
+- Use `static_assert(sizeof(Uniforms) <= kMaxPushConstantBytes)` for push constant structs.
+- `rect_tile_space` may be `(N,)` or `(2N,)` when int64 is emulated; record profile flags in fixture manifests.
 
-## Parity checklist (per stage)
+## Parity Checklist Per Stage
 
-1. Verify binding table in `shader-pipeline.md` for this SPIR-V name.
-2. Host buffer vector length == shader binding count.
-3. Push constant size matches shader.
+1. Verify the binding table in `shader-pipeline.md` for this SPIR-V name.
+2. Host binding list length matches shader binding count.
+3. Push constant size matches shader and wrapper constructor size.
 4. Fixture/golden `manifest.json` includes `bindings[]` in descriptor order.
-5. Golden failure: verify bindings and dtypes before changing shader logic.
+5. Fixture dtypes and shapes match `BufferSpec` before changing shader logic.
 
 ## Tests
 
-Goldens assume this contract; invariant tests do not catch swapped bindings. See `rewrite-testing.mdc`. Port order: `rewrite-porting-order.mdc` (contract applies at every phase).
+Goldens assume this contract; invariant tests do not catch all swapped bindings. See `rewrite-testing.mdc`.

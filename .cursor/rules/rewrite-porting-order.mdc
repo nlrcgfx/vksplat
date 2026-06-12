@@ -1,36 +1,43 @@
 ---
-description: Phased port order for rewrite kernels and subgraphs A–G
+description: Phased port order for rewrite kernels and subgraphs A-G
 globs: next/**/*.{hpp,cpp,slang,comp,glsl},next/**/tests/**,test_data/**
 alwaysApply: false
 ---
 
 # Rewrite Porting Order
 
-Mandatory sequence for kernel and subgraph ports. Complements `rewrite-buffer-contract.mdc` (wiring) and `rewrite-testing.mdc` (verification).
+Mandatory sequence for kernel and subgraph ports. Complements `rewrite-buffer-contract.mdc` for wiring and `rewrite-testing.mdc` for verification.
 
-## Phase 0 — Infrastructure
+## Phase 0 - Infrastructure
 
-Host + harness only; golden parity optional.
+Current completed substrate:
 
-- Catch2 harness + `nlrc_vksplat_gpu` minimal substrate (`rewrite-testing.mdc`)
-- Headless Vulkan device, queues (`src/gpu/headless_context.hpp`)
-- `StorageBuffer`, `ComputePipeline` (`src/gpu/`); ref-parity `executeCompute` / full pipeline wrapper — follow-on Phase 0
-- Shader embed CMake path (`shader-build-embed.mdc`)
-- Config header + generator (`nlrc_vksplat_config.hpp`, `VKSPLAT_*`, emulate flags)
+- Catch2 harness and `nlrc_vksplat_gpu`.
+- Headless Vulkan device/queue wrapper: `HeadlessContext`.
+- Typed GPU wrappers: `StorageBuffer`, `ComputePipeline`, `StorageBindingList`, `DispatchShape`, `PushConstantsView`.
+- Shader embed CMake path.
+- Config header plus shader config generator.
+- Fixture manifest/load helpers with `BufferSpec`, `BufferDtype`, and typed `load_fixture_buffer<T>()`.
 
-## Phase 1 — Subgraph D
+Deferred infrastructure:
+
+- Higher-level full pipeline wrapper that mirrors ref scheduling only after isolated dispatch tests are reliable.
+
+## Phase 1 - Subgraph D
 
 | Order | Kernel | Why |
 |-------|--------|-----|
-| 1 | `cumsum_*` | A tile indexing, `where`, E/F prune |
+| 1 | `cumsum_*` | Tile indexing, `where`, E/F prune |
 | 2 | `sum` | Densification sizing |
 | 3 | `where` | Compaction |
 
-## Phase 2 — Radix sort
+## Phase 2 - Radix Sort
 
-`radix_sort/*.comp`: `upsweep` → `spine` → `downsweep` as one unit. Port before Subgraph A integration. Re-run on `ohos-debug` when available (`ref/docs/ohos-maleoon910-porting-report.md`).
+Port `radix_sort/*.comp` as one unit: `upsweep -> spine -> downsweep`.
 
-## Phase 3 — Subgraph A
+Port before Subgraph A integration. Re-run on `ohos-debug` when available.
+
+## Phase 3 - Subgraph A
 
 | Order | Kernel |
 |-------|--------|
@@ -39,39 +46,39 @@ Host + harness only; golden parity optional.
 | 3 | `compute_tile_ranges` |
 | 4 | `rasterize_forward` |
 
-**Gate:** wire `forward()` only after all four pass isolated tests. Do not start Subgraph B until this gate passes.
+Gate: wire `forward()` only after all four pass isolated tests. Do not start Subgraph B until this gate passes.
 
-## Phase 4 — Subgraph B
+## Phase 4 - Subgraph B
 
 `ssim_forward`, `ssim_backward`
 
-## Phase 5 — Subgraph C
+## Phase 5 - Subgraph C
 
-`rasterize_backward_*` (all ref scheduler variants), then `fused_projection_backward_optimizer`
+`rasterize_backward_*` for all ref scheduler variants, then `fused_projection_backward_optimizer`.
 
-## Phase 6 — Subgraph G
+## Phase 6 - Subgraph G
 
-Morton kernels (required before E end-of-step reorder)
+Morton kernels, required before E end-of-step reorder.
 
-## Phase 7 — Subgraph E (default ADC)
+## Phase 7 - Subgraph E
 
-`default_*` chain per `shader-pipeline.md`; reuses D + G
+Default ADC chain per `shader-pipeline.md`; reuses D and G.
 
-## Phase 8 — Subgraph F (MCMC)
+## Phase 8 - Subgraph F
 
-**Deferred** until Phase 7 is complete and integrated. Do not interleave E/F porting.
+MCMC is deferred until Phase 7 is complete and integrated. Do not interleave E/F porting.
 
-## Phase 9 — E2E smoke
+## Phase 9 - E2E Smoke
 
-Tiny scene, loss trend — see `rewrite-testing.mdc`
+Tiny scene and loss trend after isolated subgraph gates pass.
 
 ## Rules
 
-- Fixture-first + binding contract at every kernel
-- Do not wire `train_step` until Phases 3–7 gates pass
-- Do not skip Phases 1–2 to test rasterize first
-- Mark stages done using SPIR-V names from shader-pipeline shader index
+- Fixture-first and binding-contract checks at every kernel.
+- Do not wire `train_step` until Phases 3-7 gates pass.
+- Do not skip Phases 1-2 to test rasterize first.
+- Mark stages done using SPIR-V names from the shader-pipeline shader index.
 
-## Deferred (Phase 2 scope)
+## Deferred Non-Kernel Scope
 
-Python bindings, viewer, perf scheduler; Thompson scheduling optimization (port all backward variants ref exposes first)
+Python bindings, viewer, perf scheduler, and Thompson scheduling optimization stay out of isolated kernel port tasks.

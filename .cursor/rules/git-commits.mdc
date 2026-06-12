@@ -7,27 +7,27 @@ alwaysApply: true
 
 Only create commits when the user explicitly asks. Do not push unless explicitly asked.
 
-## Pre-commit workflow
+## Pre-Commit Workflow
 
 Run in parallel before staging:
 
 - `git status`
-- `git diff` (staged and unstaged)
+- `git diff` for staged and unstaged changes
 - `git log --oneline -10`
 
-Then sequentially: stage relevant files → commit → `git status` to verify.
+Then stage relevant files, commit, and run `git status` to verify.
 
-## Commit message format
+## Commit Message Format
 
-**Subject (required):** `tag: concise message`
+Subject: `tag: concise message`
 
-- Lowercase Conventional Commits tag.
-- Imperative mood, no trailing period, ~72 characters max.
+- Use a lowercase Conventional Commits tag.
+- Use imperative mood, no trailing period, and roughly 72 characters max.
 - Focus on why, not a file list.
 
-**Body (optional):** blank line after subject, then 1–3 sentences for context, trade-offs, or breaking changes.
+Optional body: blank line after the subject, then 1-3 sentences for context, trade-offs, or breaking changes.
 
-### Allowed tags
+Allowed tags:
 
 | Tag | Use for |
 |-----|---------|
@@ -39,57 +39,42 @@ Then sequentially: stage relevant files → commit → `git status` to verify.
 | `test` | Tests or benchmarks |
 | `chore` | Maintenance, tooling, misc |
 | `perf` | Performance improvement |
-| `style` | Formatting only (no logic change) |
+| `style` | Formatting only, no logic change |
 | `ci` | CI/CD config |
 
-### Examples
+Examples:
 
-```
+```text
 build: add optional Python bindings toggle in CMake
-
-Keep default build path free of pybind when VKSPLAT_BUILD_PYTHON is OFF.
 ```
 
-```
+```text
 fix: correct radix sort buffer size for large splat counts
-
-Prevents GPU validation errors when instance count exceeds 1M.
 ```
 
-```
-docs: add arxiv badge and bibtex entry to readme
-```
+On Windows/PowerShell, prefer:
 
-### Commit command
-
-Prefer HEREDOC for multi-line messages:
-
-```bash
-git commit -m "$(cat <<'EOF'
-tag: concise message
-
-Optional description when it adds context.
-EOF
-)"
+```powershell
+git commit -m "tag: concise message" -m "Optional description when it adds context."
 ```
 
-On Windows/PowerShell, use `-m "subject" -m "body"` if HEREDOC is unavailable.
+On Unix shells, a heredoc is acceptable for multi-line messages.
 
 ## Safety
 
 - Never update git config.
-- No destructive git commands (force push, hard reset) unless explicitly requested.
+- No destructive git commands such as force push or hard reset unless explicitly requested.
 - No `--no-verify` or hook skipping unless explicitly requested.
 - No `--amend` unless the user requested it, HEAD was created this session, and it was not pushed.
 - Never commit secrets or credentials.
 - Do not create empty commits.
 
-## Do not stage (unless user explicitly asks)
+## Do Not Stage Unless Explicitly Requested
 
-- Build outputs: `ref/vksplat/build/`
-- Build outputs: `next/nlrc_vksplat/build/`
-- Generated shader outputs: `ref/vksplat/shader/generated/`, `next/nlrc_vksplat/build/*/generated/`
-- Caches: `.slangtorch_cache`, `__pycache__/`
-- Local presets: `CMakeUserPresets.json`
+- Build outputs: `ref/vksplat/build/`, `next/nlrc_vksplat/build/`.
+- Generated shader outputs: `ref/vksplat/shader/generated/`, `next/nlrc_vksplat/build/*/generated/`.
+- Caches: `.slangtorch_cache`, `__pycache__/`.
+- Local presets: `CMakeUserPresets.json`.
+- Local editor tasks with machine paths: `.vscode/tasks.json`, unless sanitized as a shared/example file.
 
-If `git status` shows build artifacts, stage only source changes and mention that build dirs were skipped.
+If `git status` shows build artifacts, stage only source/rule changes and mention that build dirs were skipped.

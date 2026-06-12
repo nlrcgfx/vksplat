@@ -6,25 +6,25 @@ alwaysApply: false
 
 # C++ Coding Style (Rewrite)
 
-Applies to `next/nlrc_vksplat/` only. Keep rules binary and checkable.
+Applies to `next/nlrc_vksplat/` only. Keep rules binary and checkable. `.clang-tidy` is the naming source of truth and `.clang-format` is the formatting source of truth.
 
-## Files and layout
+## Files and Layout
 
-- Use **`.hpp`** for headers and **`.cpp`** for sources — never `.h` or `.c`
-- **`#pragma once`** in every header
-- Namespace **`nlrc::vksplat`** for library code (`nlrc::vksplat::shaders` for embedded SPIR-V)
-- Paired TUs: `foo.hpp` + `foo.cpp`; declarations in hpp, definitions in cpp (templates / header-only `constexpr` in hpp when required)
-- No **`using namespace`** in headers
+- Use `.hpp` for headers and `.cpp` for sources. Do not add new `.h` or `.c` files in the rewrite.
+- Use `#pragma once` in every header.
+- Use namespace `nlrc::vksplat` for library code and `nlrc::vksplat::shaders` for embedded SPIR-V.
+- Prefer paired translation units: declarations in `.hpp`, definitions in `.cpp`; keep templates and header-only `constexpr` in headers when needed.
+- Do not use `using namespace` in headers.
 
 ```cpp
-// BAD — ref-style header name in rewrite
+// BAD - ref-style header name in rewrite
 #include "buffer.h"
 
 // GOOD
 #include "buffer.hpp"
 ```
 
-## Naming (clang-tidy SSOT: `next/nlrc_vksplat/.clang-tidy`)
+## Naming
 
 | Kind | Convention | Example |
 |------|------------|---------|
@@ -37,14 +37,14 @@ Applies to `next/nlrc_vksplat/` only. Keep rules binary and checkable.
 
 Forbidden in new code:
 
-- Ref-style `*_t` type aliases (`sortingKey_t`) — use `using SortingKey = ...`
-- camelCase free functions (`tensorBwdSharedMemory`)
+- Ref-style `*_t` type aliases such as `sortingKey_t`; use `using SortingKey = ...`.
+- camelCase free functions such as `tensorBwdSharedMemory`.
 
-## const and constexpr
+## Const and Constexpr
 
-- **`const` by default**: immutable locals, `const&` for read-only inputs, `const` member functions when state is not modified
-- **`constexpr` when compile-time**: `inline constexpr` for constants (`kFoo`), `constexpr` for pure functions evaluable at compile time
-- **`nullptr`** for null pointers — never `NULL` or `0`
+- Use `const` by default for immutable locals, `const&` for read-only inputs, and `const` member functions when state is not modified.
+- Use `inline constexpr` for constants and `constexpr` for pure functions evaluable at compile time.
+- Use `nullptr` for null pointers. Do not use `NULL` or `0` as null.
 
 ```cpp
 // BAD
@@ -60,44 +60,42 @@ inline constexpr int kTileSize = 16;
 
 Allowed:
 
-- `VKSPLAT_*` in `nlrc_vksplat_config.hpp` only (shader generator contract)
-- `#pragma once`
+- `VKSPLAT_*` macros in `nlrc_vksplat_config.hpp` only, for shader-generator compatibility.
+- `#pragma once`.
 
 Forbidden in new `next/` code:
 
-- Function-like macros (`MIN`, `MAX`, `CLAMP`) — use `std::min`, `constexpr`, or templates
-- Unscoped logic macros — prefer `inline constexpr` or `if constexpr`
+- Function-like macros such as `MIN`, `MAX`, or `CLAMP`; use `std::min`, `constexpr`, or templates.
+- Unscoped logic macros; prefer `inline constexpr` values or `if constexpr`.
 
-C++ below `namespace nlrc::vksplat` in the config header:
+In C++ declarations below `namespace nlrc::vksplat` in the config header:
 
-- No `typedef` — use `using`
-- `bool` for semantic on/off flags; `int` only for numeric shader parameters mirrored from `VKSPLAT_*`
+- Use `using`, not `typedef`.
+- Use `bool` for semantic flags; use `int` only for numeric shader parameters mirrored from `VKSPLAT_*`.
 
 ## Types and APIs
 
-- Prefer **`using`** over **`typedef`**
-- Prefer **`enum class`** over unscoped `enum` (unless C/Vulkan ABI requires raw `enum`)
-- Mark single-argument constructors **`explicit`** unless implicit conversion is intentional (add a brief comment)
-- Apply **`[[nodiscard]]`** to getters, handles, and status/error returns
-- Use **`override`** / **`final`** on virtual hierarchies; **`= default`** / **`= delete`** where appropriate
-- No raw **`new`** / **`delete`** — RAII wrappers
-- No C-style casts — `static_cast` / `reinterpret_cast` with justification
-- Vulkan/pipeline code: see `rewrite-error-handling.mdc` for `check_vk` and `[[nodiscard]]` status wrappers
+- Prefer `using` over `typedef`.
+- Prefer `enum class` over unscoped `enum`, unless C/Vulkan ABI requires a raw enum.
+- Mark single-argument constructors `explicit` unless implicit conversion is intentional and documented.
+- Apply `[[nodiscard]]` to getters, handles, and status/error returns.
+- Use `override` and `final` on virtual hierarchies; use `= default` and `= delete` where appropriate.
+- Do not use raw `new` or `delete`; use RAII wrappers.
+- Do not use C-style casts; use `static_cast` or `reinterpret_cast` with justification.
+- Vulkan/pipeline code follows `rewrite-error-handling.mdc` for `check_vk` and contract exceptions.
 
 ## Generated C++
 
-- `*_spirv.hpp` is emitted only by `spirv_to_header()` in `scripts/compile_shaders.py` — never hand-edit
-- Embed symbols: `k{Name}Spirv[]` and `k{Name}SpirvWordCount` in `nlrc::vksplat::shaders` — see `shader-build-embed.mdc`
-- Generated headers must pass the same **clang-format** and **clang-tidy** checks as hand-written code (enforced at shader build time)
+- `*_spirv.hpp` is emitted only by `spirv_to_header()` in `scripts/compile_shaders.py`; never hand-edit it.
+- Embed symbols are `k{Name}Spirv[]` and `k{Name}SpirvWordCount` in `nlrc::vksplat::shaders`.
+- Generated headers must pass the same clang-format and clang-tidy checks as hand-written code; shader build enforces this.
 
 ## Tooling
 
-Naming follows [`.clang-tidy`](next/nlrc_vksplat/.clang-tidy); formatting follows [`.clang-format`](next/nlrc_vksplat/.clang-format).
-
 Blocking lint:
 
-- CMake target **`nlrc_vksplat_lint`** runs `scripts/lint_cpp.py` (clang-format `--Werror` + clang-tidy)
-- **`nlrc_vksplat_core`** depends on lint — every build must pass
-- Shader generation runs clang-format/tidy on each `*_spirv.hpp` before the build proceeds
+- CMake target `nlrc_vksplat_lint` runs `scripts/lint_cpp.py` with clang-format `--Werror` and clang-tidy.
+- `nlrc_vksplat_core`, `nlrc_vksplat_gpu`, and `nlrc_vksplat_tests` depend on lint when those targets exist.
+- Shader generation runs clang-format/tidy on each `*_spirv.hpp` before the build proceeds.
 
-After any C++ or `spirv_to_header()` change: configure preset, then `cmake --build --preset <preset>` (or `--target nlrc_vksplat_lint`).
+After any C++ or `spirv_to_header()` change, configure a preset, then run either a full build or `cmake --build --preset <preset> --target nlrc_vksplat_lint`.

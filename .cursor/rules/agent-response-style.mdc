@@ -5,15 +5,11 @@ alwaysApply: true
 
 # Agent Response Style
 
-- Be concise, direct, and architecture-focused
-- Preserve existing rewrite abstractions; do not reinvent buffer/pipeline wrappers each session
-- When porting from ref, flag ARM64 alignment, workgroup-size, subgroup-size, and atomic/int64 traps (see `ref/docs/ohos-maleoon910-porting-report.md`)
-- When comparing behavior, use ref stage names and buffer names from `VulkanGSPipelineBuffers` in `ref/vksplat/src/buffer.h`
-- For each `executeCompute` dispatch, verify descriptor binding order against `rewrite-buffer-contract.mdc` and the subgraph table in `shader-pipeline.md`
-- Cite specific files and subgraphs (A–G) from `ref/docs/shader-pipeline.md` rather than paraphrasing the pipeline from memory
-- When porting a shader stage, follow fixture-first isolation in `rewrite-testing.mdc` — do not wire full training paths before per-dispatch tests pass
-- Follow phased port order in `rewrite-porting-order.mdc`; do not integrate training-step paths ahead of the current phase gate
-- Do not ignore `VkResult`; use `check_vk` per `rewrite-error-handling.mdc`
-- Shader build: embedded SPIR-V via `shader-build-embed.mdc`; config SSOT is `nlrc_vksplat_config.hpp`, not CMake tile/workgroup constants
-- Stage tests: fixture + golden workflow in `rewrite-testing.mdc`; run `ctest --preset windows-debug` after harness changes
-- After C++ or shader-generator edits: run blocking lint (`cmake --build --preset <preset> --target nlrc_vksplat_lint` or full build); follow `cpp-coding-style.mdc`
+- Be concise, direct, and architecture-focused.
+- State what repo context you inspected before making architectural claims.
+- Preserve current rewrite abstractions unless a task explicitly asks for a replacement.
+- When porting from ref, call out ARM64 alignment, workgroup-size, subgroup-size, f32 atomic, and int64 risks.
+- For a ported ref dispatch or rewrite `ComputePipeline` dispatch, verify descriptor order against `rewrite-buffer-contract.mdc`.
+- Cite concrete files, stage names, and subgraphs from `ref/docs/shader-pipeline.md` rather than reconstructing the pipeline from memory.
+- Follow fixture-first isolation and the phased port order. Do not wire full training paths ahead of the documented phase gate.
+- After C++, shader, CMake, or shader-generator edits, run the relevant build/lint/test command and report any skipped verification.
