@@ -1,0 +1,69 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "generate_keys_native_int64",
+  "subgraph": "generate_keys",
+  "bindings": [
+    "unsorted_keys",
+    "unsorted_gauss_idx"
+  ],
+  "buffers": {
+    "unsorted_keys": "unsorted_keys.bin",
+    "unsorted_gauss_idx": "unsorted_gauss_idx.bin"
+  },
+  "shapes": {
+    "unsorted_keys": [
+      3
+    ],
+    "unsorted_gauss_idx": [
+      3
+    ]
+  },
+  "dtypes": {
+    "unsorted_keys": "uint32",
+    "unsorted_gauss_idx": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "profile_agnostic": false,
+  "vkbd_source": "synthetic",
+  "uniforms": {
+    "image_height": 32,
+    "image_width": 32,
+    "grid_height": 2,
+    "grid_width": 2,
+    "num_splats": 4,
+    "active_sh": 0,
+    "step": 0,
+    "camera_model": 0,
+    "fx": 16.0,
+    "fy": 16.0,
+    "cx": 16.0,
+    "cy": 16.0,
+    "dist_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "world_view_transform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "notes": "CPU-generated generate_keys golden for tile/depth sort-key packing and splat index emission"
+}

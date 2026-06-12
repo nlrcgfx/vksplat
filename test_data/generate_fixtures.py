@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import filecmp
 import json
+import math
 import shutil
 import struct
 import sys
@@ -20,7 +21,10 @@ CUMSUM_BLOCK_SIZE = 512
 SUM_BLOCK_SIZE = 512
 WHERE_BLOCK_SIZE = 256
 SH_REORDER_SIZE = 32
+TILE_HEIGHT = 16
+TILE_WIDTH = 16
 SORTING_KEY_BITS = 32
+FLOAT32_FRACTION_BITS = 23
 RADIX_SORT_RADIX = 256
 RADIX_WORKGROUP_SIZE = 512
 RADIX_PARTITION_DIVISION = 8
@@ -102,6 +106,33 @@ def sorted_indices_by_key(keys: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(sorted(range(len(keys)), key=lambda index: keys[index]))
 
 
+def float32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def depth_bits_for_grid(grid_width: int, grid_height: int) -> int:
+    return min(int(31.99 - math.log2(grid_width * grid_height)), FLOAT32_FRACTION_BITS)
+
+
+def generate_keys_depth_code(depth: float, depth_bits: int) -> int:
+    depth32 = float32(depth)
+    transformed = float32(float32(float32(2.0) * depth32 + float32(1.0)) / float32(depth32 + float32(1.0)))
+    bits = struct.unpack("<I", struct.pack("<f", transformed))[0]
+    return (bits & ((1 << FLOAT32_FRACTION_BITS) - 1)) >> (FLOAT32_FRACTION_BITS - depth_bits)
+
+
+def pack_rect_tile_space(rects: Iterable[tuple[int, int, int, int]], emulate_int64: int) -> tuple[int, ...]:
+    words: list[int] = []
+    for min_x, min_y, max_x, max_y in rects:
+        min_word = min_x | (min_y << 16)
+        max_word = max_x | (max_y << 16)
+        if emulate_int64:
+            words.extend((min_word, max_word))
+        else:
+            words.append(min_word | (max_word << 32))
+    return tuple(words)
+
+
 def stage_relpath(stage_name: str, subgraph: str) -> Path:
     if subgraph == "harness":
         if stage_name == "harness_smoke":
@@ -130,6 +161,11 @@ def stage_relpath(stage_name: str, subgraph: str) -> Path:
         if stage_name.startswith("projection_forward_"):
             return Path("projection_forward") / stage_name.removeprefix("projection_forward_")
         raise ValueError(f"unsupported projection stage: {stage_name}")
+
+    if subgraph == "generate_keys":
+        if stage_name.startswith("generate_keys_"):
+            return Path("generate_keys") / stage_name.removeprefix("generate_keys_")
+        raise ValueError(f"unsupported generate_keys stage: {stage_name}")
 
     raise ValueError(f"unsupported subgraph for stage layout: {subgraph}")
 
@@ -349,6 +385,138 @@ def projection_forward_case(stage_name: str, emulate_int64: int) -> FixtureCase:
     )
 
 
+def generate_keys_case(stage_name: str, emulate_int64: int) -> FixtureCase:
+    grid_width = 2
+    grid_height = 2
+    num_splats = 4
+    tiles_touched = (1, 0, 1, 1)
+    index_buffer_offset = prefix_sum(tiles_touched)
+    num_indices = index_buffer_offset[-1]
+    depth_bits = depth_bits_for_grid(grid_width, grid_height)
+
+    rects = (
+        (0, 0, 1, 1),
+        (0, 0, 0, 0),
+        (1, 0, 2, 1),
+        (0, 1, 1, 2),
+    )
+    xy_vs = (
+        8.0,
+        8.0,
+        0.0,
+        0.0,
+        24.0,
+        8.0,
+        8.0,
+        24.0,
+    )
+    depths = (1.0, 2.0, 3.0, 7.0)
+    inv_cov_vs_opacity = (
+        1.0,
+        0.0,
+        1.0,
+        0.5,
+        1.0,
+        0.0,
+        1.0,
+        0.5,
+        1.0,
+        0.0,
+        1.0,
+        0.5,
+        1.0,
+        0.0,
+        1.0,
+        0.5,
+    )
+
+    expected_keys: list[int] = [0] * num_indices
+    expected_indices: list[int] = [0] * num_indices
+    for splat_index, touched in enumerate(tiles_touched):
+        if touched == 0:
+            continue
+        start = 0 if splat_index == 0 else index_buffer_offset[splat_index - 1]
+        rect = rects[splat_index]
+        tile_id = rect[1] * grid_width + rect[0]
+        expected_keys[start] = (tile_id << depth_bits) | generate_keys_depth_code(depths[splat_index], depth_bits)
+        expected_indices[start] = splat_index
+
+    rect_dtype = "int32" if emulate_int64 else "int64"
+    rect_shape = (num_splats * 2,) if emulate_int64 else (num_splats,)
+    profile_name = "emulated int64" if emulate_int64 else "native int64"
+
+    return FixtureCase(
+        stage_name=stage_name,
+        subgraph="generate_keys",
+        fixture_bindings=(
+            "xy_vs",
+            "inv_cov_vs_opacity",
+            "depths",
+            "rect_tile_space",
+            "index_buffer_offset",
+            "unsorted_keys",
+            "unsorted_gauss_idx",
+        ),
+        fixture_buffers=(
+            BufferData("xy_vs", "float32", (num_splats, 2), xy_vs),
+            BufferData("inv_cov_vs_opacity", "float32", (num_splats, 4), inv_cov_vs_opacity),
+            BufferData("depths", "float32", (num_splats,), depths),
+            BufferData("rect_tile_space", rect_dtype, rect_shape, pack_rect_tile_space(rects, emulate_int64)),
+            BufferData("tiles_touched", "int32", (num_splats,), tiles_touched),
+            BufferData("index_buffer_offset", "int32", (num_splats,), index_buffer_offset),
+            BufferData("unsorted_keys", "uint32", (num_indices,), [0] * num_indices),
+            BufferData("unsorted_gauss_idx", "int32", (num_indices,), [0] * num_indices),
+        ),
+        golden_bindings=("unsorted_keys", "unsorted_gauss_idx"),
+        golden_buffers=(
+            BufferData("unsorted_keys", "uint32", (num_indices,), tuple(expected_keys)),
+            BufferData("unsorted_gauss_idx", "int32", (num_indices,), tuple(expected_indices)),
+        ),
+        fixture_notes=(
+            "Synthetic generate_keys fixture using single-tile rects, inclusive cumsum offsets, "
+            f"and {profile_name} rect_tile_space layout"
+        ),
+        golden_notes=(
+            "CPU-generated generate_keys golden for tile/depth sort-key packing and splat index emission"
+        ),
+        emulate_int64=emulate_int64,
+        profile_agnostic=False,
+        uniforms={
+            "image_height": TILE_HEIGHT * grid_height,
+            "image_width": TILE_WIDTH * grid_width,
+            "grid_height": grid_height,
+            "grid_width": grid_width,
+            "num_splats": num_splats,
+            "active_sh": 0,
+            "step": 0,
+            "camera_model": 0,
+            "fx": 16.0,
+            "fy": 16.0,
+            "cx": 16.0,
+            "cy": 16.0,
+            "dist_coeffs": [0.0, 0.0, 0.0, 0.0],
+            "world_view_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ],
+        },
+    )
+
+
 def fixture_cases() -> tuple[FixtureCase, ...]:
     near_block_values = tuple((index % 7) - 3 for index in range(CUMSUM_BLOCK_SIZE - 1))
     exact_block_values = tuple(1 for _ in range(CUMSUM_BLOCK_SIZE))
@@ -426,6 +594,8 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         radix_sort_case("radix_sort_reverse", reverse_keys, "reverse-sorted input"),
         projection_forward_case("projection_forward_native_int64", 0),
         projection_forward_case("projection_forward_emulated_int64", 1),
+        generate_keys_case("generate_keys_native_int64", 0),
+        generate_keys_case("generate_keys_emulated_int64", 1),
     )
 
 

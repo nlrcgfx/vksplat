@@ -141,7 +141,7 @@ bindings_from_manifest(const nlrc::vksplat::tests::FixtureManifest &manifest, co
 
 } // namespace
 
-TEST_CASE("Dispatch projection_forward Subgraph A shader", "[gpu]") {
+TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
 #if VKSPLAT_USE_EMULATED_INT64

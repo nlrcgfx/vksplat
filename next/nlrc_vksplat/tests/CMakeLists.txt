@@ -84,6 +84,7 @@ target_sources(nlrc_vksplat_tests
     test_main.cpp
     test_fixture_catalog.cpp
     test_fixture_loader.cpp
+    test_generate_keys.cpp
     test_golden_compare.cpp
     test_gpu_smoke.cpp
     test_manifest_profile.cpp

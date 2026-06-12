@@ -146,6 +146,12 @@ class ShaderCompiler:
                 deps=["config.slang", "utils.slang", "spherical_harmonics.slang"],
             ),
             ShaderSource(
+                source="tile_shader.slang",
+                language="slang",
+                jobs=[ShaderJob("generate_keys", {"ENTRY": 1})],
+                deps=["config.slang", "utils.slang"],
+            ),
+            ShaderSource(
                 source="radix_sort/upsweep.comp",
                 language="glsl",
                 jobs=[ShaderJob("radix_sort_upsweep", {})],
