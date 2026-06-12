@@ -82,6 +82,7 @@ add_executable(nlrc_vksplat_tests)
 target_sources(nlrc_vksplat_tests
   PRIVATE
     test_main.cpp
+    test_compute_tile_ranges.cpp
     test_fixture_catalog.cpp
     test_fixture_loader.cpp
     test_generate_keys.cpp

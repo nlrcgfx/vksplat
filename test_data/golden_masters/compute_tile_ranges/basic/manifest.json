@@ -1,0 +1,63 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "compute_tile_ranges",
+  "subgraph": "compute_tile_ranges",
+  "bindings": [
+    "tile_ranges"
+  ],
+  "buffers": {
+    "tile_ranges": "tile_ranges.bin"
+  },
+  "shapes": {
+    "tile_ranges": [
+      7
+    ]
+  },
+  "dtypes": {
+    "tile_ranges": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "profile_agnostic": true,
+  "vkbd_source": "synthetic",
+  "uniforms": {
+    "image_height": 32,
+    "image_width": 48,
+    "grid_height": 2,
+    "grid_width": 3,
+    "num_splats": 0,
+    "active_sh": 4,
+    "step": 0,
+    "camera_model": 0,
+    "fx": 16.0,
+    "fy": 16.0,
+    "cx": 16.0,
+    "cy": 16.0,
+    "dist_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "world_view_transform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "notes": "CPU-generated compute_tile_ranges golden for per-tile start offsets"
+}

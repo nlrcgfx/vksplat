@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "compute_tile_ranges_spirv.hpp"
 #include "cumsum_add_block_offsets_spirv.hpp"
 #include "cumsum_block_scan_spirv.hpp"
 #include "cumsum_scan_block_sums_spirv.hpp"
@@ -134,6 +135,31 @@ void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
   require_buffer_elements<std::int32_t>(*bindings.index_buffer_offset, num_splats, "index_buffer_offset");
   require_buffer_elements<SortingKey>(*bindings.unsorted_keys, output_count, "unsorted_keys");
   require_buffer_elements<std::int32_t>(*bindings.unsorted_gauss_idx, output_count, "unsorted_gauss_idx");
+}
+
+[[nodiscard]] std::size_t require_tile_count(const RendererUniforms &uniforms) {
+  if (uniforms.grid_width == 0U) {
+    throw std::invalid_argument("grid_width must be > 0");
+  }
+  if (uniforms.grid_height == 0U) {
+    throw std::invalid_argument("grid_height must be > 0");
+  }
+  const auto grid_width = static_cast<std::size_t>(uniforms.grid_width);
+  const auto grid_height = static_cast<std::size_t>(uniforms.grid_height);
+  if (grid_height > std::numeric_limits<std::size_t>::max() / grid_width) {
+    throw std::invalid_argument("tile count overflows size_t");
+  }
+  return grid_height * grid_width;
+}
+
+void validate_compute_tile_ranges_bindings(const ComputeTileRangesBindings &bindings,
+                                           std::size_t num_indices,
+                                           std::size_t num_tiles) {
+  require_binding(bindings.sorted_keys, "sorted_keys");
+  require_binding(bindings.tile_ranges, "tile_ranges");
+
+  require_buffer_elements<SortingKey>(*bindings.sorted_keys, num_indices, "sorted_keys");
+  require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
 }
 
 void validate_radix_sort_bindings(const RadixSortBindings &bindings, std::size_t element_count) {
@@ -305,8 +331,31 @@ void execute_generate_keys(const HeadlessContext &context,
   pipeline.dispatch(dispatch_groups_for(num_splats, VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE), push_constants);
 }
 
-RadixSortResult
-execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count) {
+void execute_compute_tile_ranges(const HeadlessContext &context,
+                                 const ComputeTileRangesBindings &bindings,
+                                 const RendererUniforms &uniforms,
+                                 std::size_t num_indices) {
+  const auto num_indices_u32 = require_uint32_count(num_indices, "num_indices");
+  const auto num_tiles = require_tile_count(uniforms);
+  validate_compute_tile_ranges_bindings(bindings, num_indices, num_tiles);
+
+  auto tile_range_uniforms = uniforms;
+  tile_range_uniforms.active_sh = num_indices_u32;
+
+  auto spirv = make_span(shaders::kComputeTileRangesSpirv);
+  ComputePipeline pipeline(context, spirv, kComputeTileRangesBindingCount, sizeof(RendererUniforms));
+
+  pipeline.bind_storage_buffers({
+      bindings.sorted_keys,
+      bindings.tile_ranges,
+  });
+
+  const auto push_constants = ByteView::from_object(tile_range_uniforms);
+  pipeline.dispatch(dispatch_groups_for(num_indices + 1U, VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS), push_constants);
+}
+
+auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count)
+    -> RadixSortResult {
   const auto element_count_u32 = require_uint32_count(element_count, "element_count");
   validate_radix_sort_bindings(bindings, element_count);
 

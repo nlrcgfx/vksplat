@@ -167,6 +167,13 @@ def stage_relpath(stage_name: str, subgraph: str) -> Path:
             return Path("generate_keys") / stage_name.removeprefix("generate_keys_")
         raise ValueError(f"unsupported generate_keys stage: {stage_name}")
 
+    if subgraph == "compute_tile_ranges":
+        if stage_name == "compute_tile_ranges":
+            return Path("compute_tile_ranges") / "basic"
+        if stage_name.startswith("compute_tile_ranges_"):
+            return Path("compute_tile_ranges") / stage_name.removeprefix("compute_tile_ranges_")
+        raise ValueError(f"unsupported compute_tile_ranges stage: {stage_name}")
+
     raise ValueError(f"unsupported subgraph for stage layout: {subgraph}")
 
 
@@ -517,6 +524,77 @@ def generate_keys_case(stage_name: str, emulate_int64: int) -> FixtureCase:
     )
 
 
+def compute_tile_ranges_case() -> FixtureCase:
+    grid_width = 3
+    grid_height = 2
+    tile_ids = (1, 1, 3, 4)
+    depths = (1.0, 2.0, 3.0, 7.0)
+    depth_bits = depth_bits_for_grid(grid_width, grid_height)
+    sorted_keys = tuple(
+        (tile_id << depth_bits) | generate_keys_depth_code(depth, depth_bits)
+        for tile_id, depth in zip(tile_ids, depths)
+    )
+    num_tiles = grid_width * grid_height
+    tile_ranges = [0] * (num_tiles + 1)
+
+    prev_tile = -1
+    for index in range(len(sorted_keys) + 1):
+        curr_tile = num_tiles if index == len(sorted_keys) else sorted_keys[index] >> depth_bits
+        for tile_id in range(prev_tile + 1, curr_tile + 1):
+            tile_ranges[tile_id] = index
+        prev_tile = curr_tile
+
+    return FixtureCase(
+        stage_name="compute_tile_ranges",
+        subgraph="compute_tile_ranges",
+        fixture_bindings=("sorted_keys", "tile_ranges"),
+        fixture_buffers=(
+            BufferData("sorted_keys", "uint32", (len(sorted_keys),), sorted_keys),
+            BufferData("tile_ranges", "int32", (num_tiles + 1,), [-1] * (num_tiles + 1)),
+        ),
+        golden_bindings=("tile_ranges",),
+        golden_buffers=(BufferData("tile_ranges", "int32", (num_tiles + 1,), tuple(tile_ranges)),),
+        fixture_notes=(
+            "Synthetic compute_tile_ranges fixture with a 3x2 tile grid, duplicate tile entries, "
+            "leading empty tile, interior gap, and trailing sentinel range"
+        ),
+        golden_notes="CPU-generated compute_tile_ranges golden for per-tile start offsets",
+        uniforms={
+            "image_height": TILE_HEIGHT * grid_height,
+            "image_width": TILE_WIDTH * grid_width,
+            "grid_height": grid_height,
+            "grid_width": grid_width,
+            "num_splats": 0,
+            "active_sh": len(sorted_keys),
+            "step": 0,
+            "camera_model": 0,
+            "fx": 16.0,
+            "fy": 16.0,
+            "cx": 16.0,
+            "cy": 16.0,
+            "dist_coeffs": [0.0, 0.0, 0.0, 0.0],
+            "world_view_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ],
+        },
+    )
+
+
 def fixture_cases() -> tuple[FixtureCase, ...]:
     near_block_values = tuple((index % 7) - 3 for index in range(CUMSUM_BLOCK_SIZE - 1))
     exact_block_values = tuple(1 for _ in range(CUMSUM_BLOCK_SIZE))
@@ -596,6 +674,7 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         projection_forward_case("projection_forward_emulated_int64", 1),
         generate_keys_case("generate_keys_native_int64", 0),
         generate_keys_case("generate_keys_emulated_int64", 1),
+        compute_tile_ranges_case(),
     )
 
 

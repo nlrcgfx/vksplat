@@ -14,7 +14,7 @@ For the broader test coverage matrix, known gaps, and hardening roadmap, see the
 - `fixtures/<group>/<case>/`: inputs, initial mutable output buffers, and `manifest.json`
 - `golden_masters/<group>/<case>/`: expected outputs and `manifest.json` (mirrors `fixtures/` paths)
 
-Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`, `projection_forward`, `generate_keys`. Each case directory holds one globally unique `stage_name` in its manifest (for example `cumsum_single_pass` under `fixtures/cumsum/single_pass/`).
+Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`, `projection_forward`, `generate_keys`, `compute_tile_ranges`. Each case directory holds one globally unique `stage_name` in its manifest (for example `cumsum_single_pass` under `fixtures/cumsum/single_pass/`).
 
 All `.bin` files are raw little-endian buffers interpreted through the stage manifest
 `dtype` and `shape`.
@@ -83,6 +83,13 @@ Current `generate_keys` fixture assumptions mirror `nlrc_vksplat_config.hpp`:
 - `grid_width = grid_height = 2`, so `depth_bits = 23`
 - `rect_tile_space` uses either one `int64` word or two emulated `int32` words, depending on manifest profile
 
+Current `compute_tile_ranges` fixture assumptions mirror `nlrc_vksplat_config.hpp`:
+
+- `SORTING_KEY_BITS = 32`
+- `TILE_WIDTH = TILE_HEIGHT = 16`
+- `grid_width = 3`, `grid_height = 2`, so `num_tiles = 6` and `depth_bits = 23`
+- `tile_ranges` contains `num_tiles + 1` start offsets and uses the terminal sentinel at index `num_tiles`
+
 ## When Block Sizes Change
 
 Treat any change to `VKSPLAT_*_BLOCK_SIZE`, `VKSPLAT_RADIX_*`, or
@@ -132,10 +139,11 @@ python test_data\generate_fixtures.py --check
 | `projection_forward_emulated_int64` | `projection_forward` GPU shader | Same as `projection_forward_native_int64`, except `rect_tile_space` is two `int32` words | none; invariant-only oracle | Emulated-`int64` `rect_tile_space` layout plus finite/bounded projection outputs for one visible centered splat. |
 | `generate_keys_native_int64` | `generate_keys` GPU shader | `N=4`; 2x2 tile grid; `xy_vs=[(8,8),(0,0),(24,8),(8,24)]`; `depths=[1,2,3,7]`; each `inv_cov_vs_opacity=[1,0,1,0.5]`; rects `[(0,0)-(1,1), empty, (1,0)-(2,1), (0,1)-(1,2)]`; `tiles_touched=[1,0,1,1]`; `index_buffer_offset=[1,1,2,3]`; outputs zero-initialized | `unsorted_keys=[4194304,14680064,24117248]`; `unsorted_gauss_idx=[0,2,3]` | Native-`int64` key packing, inclusive cumsum offset consumption, zero-touch splat skip, and valid splat-index emission. |
 | `generate_keys_emulated_int64` | `generate_keys` GPU shader | Same as `generate_keys_native_int64`, except `rect_tile_space` is two `int32` words per splat | Same as `generate_keys_native_int64` | Emulated-`int64` key packing, inclusive cumsum offset consumption, zero-touch splat skip, and valid splat-index emission. |
+| `compute_tile_ranges` | `compute_tile_ranges` GPU shader | `3x2` tile grid; sorted tile IDs `[1,1,3,4]`; sorted keys `[12582912,13981013,31457280,40894464]`; `tile_ranges` initialized to seven `-1` values | `tile_ranges=[0,0,2,2,3,4,4]` | Per-tile start offset construction, duplicate tile entries, leading empty tile, interior gap, trailing sentinel, and `active_sh` as `num_indices`. |
 
 Fixture `stage_name` values are globally unique (`cumsum_single_pass`, `radix_sort_single_partition`);
-manifest `subgraph` records the porting family (`utility`, `radix_sort`, `projection`, `generate_keys`, `harness`), while
-on-disk folders group by kernel or pipeline (`cumsum/`, `sum/`, `where/`, `radix_sort/`, `projection_forward/`, `generate_keys/`, `harness/`). Utility
+manifest `subgraph` records the porting family (`utility`, `radix_sort`, `projection`, `generate_keys`, `compute_tile_ranges`, `harness`), while
+on-disk folders group by kernel or pipeline (`cumsum/`, `sum/`, `where/`, `radix_sort/`, `projection_forward/`, `generate_keys/`, `compute_tile_ranges/`, `harness/`). Utility
 shader fixtures validate isolated dispatch behavior before larger ref-parity fixtures
 are added. The radix sort fixtures validate the isolated Phase 2 sort pipeline. Their
 manifests list the working buffers, while per-pass descriptor order is asserted in
@@ -150,6 +158,8 @@ Projection manifests list descriptor bindings `0..10` in the exact order from
 `unsorted_gauss_idx`. They also include unbound `tiles_touched` source data so
 tests can assert `index_buffer_offset` is the inclusive cumsum consumed by the
 shader.
+`compute_tile_ranges` manifests list descriptor bindings `0..1` in the exact
+order from `shader-pipeline.md`: `sorted_keys`, `tile_ranges`.
 
 ## Manifest Schema
 

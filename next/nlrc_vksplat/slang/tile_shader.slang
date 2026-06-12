@@ -75,7 +75,7 @@ void main(
 
     float zf = read_t1_float(globalIdx, depths);
     zf = (2.0*zf+1.0)/(zf+1.0);  // between 1 and 2, make float bits easier
-    uint32_t z = (reinterpret<uint32_t>(zf) & ((1u<<FLOAT32_FRACTION_BITS)-1u)) >> (FLOAT32_FRACTION_BITS-DEPTH_BITS);
+    uint32_t z = (reinterpret<uint32_t>(zf) & ((1u << FLOAT32_FRACTION_BITS) - 1u)) >> FLOAT32_FRACTION_BITS-DEPTH_BITS;
 
   #if USE_EMULATED_INT64
     rectangle rect;
@@ -151,9 +151,9 @@ void main(
     }
 
     for (; offset < offset_max; offset++) {
-        // out_unsorted_keys[offset] = sortingKey_t(-1);
         out_unsorted_keys[offset] = sortingKey_t(
-            uint32_t(offset%(grid_width*grid_height) << DEPTH_BITS) | ((1u << DEPTH_BITS) - 1u));
+            uint32_t(offset % (grid_width * grid_height) << DEPTH_BITS) | ((1u << DEPTH_BITS) - 1u)
+        );
         out_unsorted_gauss_idx[offset] = globalIdx;
     }
 
@@ -187,8 +187,10 @@ void main(
     }
 
     // Read tile ID from key. Update start/end of tile range if at limit.
-    sortingKey_t key = sorted_keys[globalIdx];
-    uint32_t currtile = globalIdx == num_isects ? grid_height * grid_width : uint32_t(key) >> DEPTH_BITS;
+    uint32_t currtile = grid_height * grid_width;
+    if (globalIdx < num_isects) {
+        currtile = uint32_t(sorted_keys[globalIdx]) >> DEPTH_BITS;
+    }
     uint32_t prevtile = globalIdx == 0 ? uint32_t(-1) : uint32_t(sorted_keys[globalIdx-1]) >> DEPTH_BITS;
 
     for (uint32_t i = prevtile+1; i <= currtile; ++i) {

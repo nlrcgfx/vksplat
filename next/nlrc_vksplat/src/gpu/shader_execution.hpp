@@ -15,6 +15,7 @@ inline constexpr std::uint32_t kCumsumBindingCount = 3;
 inline constexpr std::uint32_t kSumBindingCount = 2;
 inline constexpr std::uint32_t kWhereBindingCount = 3;
 inline constexpr std::uint32_t kGenerateKeysBindingCount = 7;
+inline constexpr std::uint32_t kComputeTileRangesBindingCount = 2;
 inline constexpr std::uint32_t kProjectionForwardBindingCount = 11;
 inline constexpr std::uint32_t kRadixSortUpsweepBindingCount = 3;
 inline constexpr std::uint32_t kRadixSortSpineBindingCount = 2;
@@ -83,6 +84,11 @@ struct GenerateKeysBindings final {
   StorageBuffer *unsorted_gauss_idx{};
 };
 
+struct ComputeTileRangesBindings final {
+  const StorageBuffer *sorted_keys{};
+  StorageBuffer *tile_ranges{};
+};
+
 struct RadixSortBindings final {
   StorageBuffer *keys_1{};
   StorageBuffer *indices_1{};
@@ -122,6 +128,11 @@ void execute_generate_keys(const HeadlessContext &context,
                            const GenerateKeysBindings &bindings,
                            const RendererUniforms &uniforms,
                            std::size_t output_count);
+
+void execute_compute_tile_ranges(const HeadlessContext &context,
+                                 const ComputeTileRangesBindings &bindings,
+                                 const RendererUniforms &uniforms,
+                                 std::size_t num_indices);
 
 [[nodiscard]] RadixSortResult
 execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count);
