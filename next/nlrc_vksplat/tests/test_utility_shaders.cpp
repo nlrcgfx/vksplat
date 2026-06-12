@@ -1,11 +1,16 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <numeric>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "cumsum_add_block_offsets_spirv.hpp"
+#include "cumsum_block_scan_spirv.hpp"
+#include "cumsum_scan_block_sums_spirv.hpp"
 #include "cumsum_single_pass_spirv.hpp"
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
@@ -21,6 +26,8 @@
 namespace {
 
 using StorageBufferMap = std::map<std::string, const nlrc::vksplat::gpu::StorageBuffer *>;
+
+inline constexpr std::uint32_t kCumsumStorageBufferCount = 3;
 
 struct ElementCountPushConstants final {
   std::uint32_t num_elements;
@@ -55,6 +62,27 @@ bindings_from_manifest(const nlrc::vksplat::tests::FixtureManifest &manifest, co
     -> nlrc::vksplat::gpu::DispatchShape {
   const auto groups = static_cast<std::uint32_t>((element_count + block_size - 1U) / block_size);
   return {groups, 1U, 1U};
+}
+
+[[nodiscard]] constexpr std::size_t ceil_div(std::size_t value, std::size_t divisor) {
+  return (value + divisor - 1U) / divisor;
+}
+
+void dispatch_cumsum_phase(nlrc::vksplat::gpu::ComputePipeline &pipeline,
+                           const std::vector<const nlrc::vksplat::gpu::StorageBuffer *> &storage_buffers,
+                           std::size_t element_count) {
+  pipeline.bind_storage_buffers(storage_buffers);
+
+  const ElementCountPushConstants push_constants{static_cast<std::uint32_t>(element_count)};
+  auto push_constants_view = nlrc::vksplat::ByteView::from_object(push_constants);
+  auto dispatch_shape = dispatch_groups_for(element_count, VKSPLAT_CUMSUM_BLOCK_SIZE);
+  pipeline.dispatch(dispatch_shape, push_constants_view);
+}
+
+[[nodiscard]] std::vector<std::int32_t> inclusive_prefix_sum(const std::vector<std::int32_t> &input) {
+  std::vector<std::int32_t> output(input.size());
+  std::inclusive_scan(input.begin(), input.end(), output.begin());
+  return output;
 }
 
 } // namespace
@@ -116,6 +144,107 @@ TEST_CASE("Dispatch cumsum single-pass utility shader", "[gpu]") {
 
     const auto actual = output_buffer.read_back<std::int32_t>(expected.size());
 
+    REQUIRE(actual == expected);
+  }
+}
+
+TEST_CASE("Dispatch cumsum multi-block utility shader", "[gpu]") {
+  NLRC_REQUIRE_GPU();
+
+  struct CumsumCase final {
+    const char *stage_name;
+    bool two_level;
+  };
+
+  const std::array<CumsumCase, 2> cases = {
+      CumsumCase{"D_cumsum_multi_block", false},
+      CumsumCase{"D_cumsum_multi_block_two_level", true},
+  };
+
+  for (const auto &test_case : cases) {
+    INFO("stage: " << test_case.stage_name);
+
+    const auto fixture_root = nlrc::vksplat::tests::fixture_dir(test_case.stage_name);
+    const auto golden_root = nlrc::vksplat::tests::golden_dir(test_case.stage_name);
+
+    const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(fixture_root / "manifest.json");
+    const auto golden_manifest = nlrc::vksplat::tests::load_fixture_manifest(golden_root / "manifest.json");
+
+    const auto input = nlrc::vksplat::tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "input");
+
+    const auto initial_output =
+        nlrc::vksplat::tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "output");
+
+    const auto block_sums =
+        nlrc::vksplat::tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "block_sums");
+
+    const auto num_blocks = ceil_div(input.size(), VKSPLAT_CUMSUM_BLOCK_SIZE);
+    REQUIRE(input.size() > VKSPLAT_CUMSUM_BLOCK_SIZE);
+    REQUIRE(block_sums.size() == num_blocks);
+
+    const nlrc::vksplat::gpu::HeadlessContext context;
+
+    auto input_buffer = make_storage_buffer(context, input);
+    auto output_buffer = make_storage_buffer(context, initial_output);
+    auto block_sums_buffer = make_storage_buffer(context, block_sums);
+
+    std::optional<nlrc::vksplat::gpu::StorageBuffer> block_sums2_buffer;
+    std::size_t num_blocks2 = 0;
+
+    if (test_case.two_level) {
+      const auto block_sums2 =
+          nlrc::vksplat::tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "block_sums2");
+
+      num_blocks2 = ceil_div(num_blocks, VKSPLAT_CUMSUM_BLOCK_SIZE);
+      REQUIRE(block_sums2.size() == num_blocks2);
+      block_sums2_buffer.emplace(make_storage_buffer(context, block_sums2));
+    }
+
+    auto block_scan_spirv = nlrc::vksplat::make_span(nlrc::vksplat::shaders::kCumsumBlockScanSpirv);
+    auto scan_block_sums_spirv = nlrc::vksplat::make_span(nlrc::vksplat::shaders::kCumsumScanBlockSumsSpirv);
+    auto add_offsets_spirv = nlrc::vksplat::make_span(nlrc::vksplat::shaders::kCumsumAddBlockOffsetsSpirv);
+
+    nlrc::vksplat::gpu::ComputePipeline block_scan_pipeline(context, block_scan_spirv, kCumsumStorageBufferCount,
+                                                            sizeof(ElementCountPushConstants));
+    nlrc::vksplat::gpu::ComputePipeline scan_block_sums_pipeline(
+        context, scan_block_sums_spirv, kCumsumStorageBufferCount, sizeof(ElementCountPushConstants));
+
+    nlrc::vksplat::gpu::ComputePipeline add_offsets_pipeline(context, add_offsets_spirv, kCumsumStorageBufferCount,
+                                                             sizeof(ElementCountPushConstants));
+
+    const std::vector<const nlrc::vksplat::gpu::StorageBuffer *> primary_bindings = {
+        &input_buffer,
+        &output_buffer,
+        &block_sums_buffer,
+    };
+
+    dispatch_cumsum_phase(block_scan_pipeline, primary_bindings, input.size());
+
+    if (test_case.two_level) {
+      REQUIRE(block_sums2_buffer.has_value());
+      const std::vector<const nlrc::vksplat::gpu::StorageBuffer *> block_sums_bindings = {
+          &block_sums_buffer,
+          &block_sums_buffer,
+          &*block_sums2_buffer,
+      };
+
+      dispatch_cumsum_phase(block_scan_pipeline, block_sums_bindings, num_blocks);
+      dispatch_cumsum_phase(scan_block_sums_pipeline, block_sums_bindings, num_blocks2);
+      dispatch_cumsum_phase(add_offsets_pipeline, block_sums_bindings, num_blocks);
+    } else {
+      dispatch_cumsum_phase(scan_block_sums_pipeline, primary_bindings, num_blocks);
+    }
+
+    dispatch_cumsum_phase(add_offsets_pipeline, primary_bindings, input.size());
+
+    const auto expected =
+        nlrc::vksplat::tests::load_fixture_buffer<std::int32_t>(golden_root, golden_manifest, "output");
+
+    const auto expected_from_input = inclusive_prefix_sum(input);
+    const auto actual = output_buffer.read_back<std::int32_t>(expected.size());
+
+    REQUIRE(expected == expected_from_input);
+    REQUIRE(actual.size() == expected.size());
     REQUIRE(actual == expected);
   }
 }

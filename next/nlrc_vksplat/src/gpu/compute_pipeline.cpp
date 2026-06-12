@@ -233,6 +233,14 @@ void ComputePipeline::dispatch(DispatchShape shape, PushConstantsView push_const
                        static_cast<std::uint32_t>(push_constants.size_bytes()), push_constants.data());
   }
   vkCmdDispatch(command_buffer_, shape.groups_x, shape.groups_y, shape.groups_z);
+
+  VkMemoryBarrier shader_write_barrier{};
+  shader_write_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  shader_write_barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  shader_write_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  vkCmdPipelineBarrier(command_buffer_, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                       kSingleSubmitCount, &shader_write_barrier, 0, nullptr, 0, nullptr);
+
   check_vk(vkEndCommandBuffer(command_buffer_), "vkEndCommandBuffer");
 
   context_->submit_and_wait(command_buffer_);

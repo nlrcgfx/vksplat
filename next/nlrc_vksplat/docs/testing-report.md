@@ -4,7 +4,36 @@ This document is the testing reference for the rewrite in `next/nlrc_vksplat/`.
 It records what the current tests validate, what is intentionally outside the
 current test surface, and where future hardening should focus.
 
-## Purpose And Scope
+## At a glance
+
+| Item | Current state |
+|------|---------------|
+| Test binary | `nlrc_vksplat_tests` (Catch2 + CTest) |
+| Host tests | `[host]` cases; reliable baseline on normal dev machines |
+| GPU tests | `[gpu]` cases; controlled by `NLRC_VKSPLAT_GPU_TESTS` (`AUTO`, `REQUIRE`, `OFF`) |
+| Covered dispatches | Smoke compute wrapper; Subgraph D utilities: cumsum, sum, where |
+| Fixture source | [`test_data/generate_fixtures.py`](../../../test_data/generate_fixtures.py) |
+| Per-fixture values | [`test_data/README.md`](../../../test_data/README.md) fixture catalog |
+
+## How to use this document
+
+| Section | Read when |
+|---------|-----------|
+| [Test execution workflow](#test-execution-workflow) | Running or debugging CTest |
+| [Coverage matrix](#coverage-matrix) | Checking what is already tested |
+| [Fixture and golden data coverage](#fixture-and-golden-data-coverage) | Adding or changing fixtures |
+| [GPU policy and reliability](#gpu-policy-and-reliability) | Configuring optional GPU validation |
+| [Not covered](#not-covered) | Planning next work |
+| [Hardening backlog](#hardening-backlog) | Optional future improvements |
+| [Gap detection rules](#gap-detection-rules) | Required checks when changing tests or fixtures |
+
+## Related documentation
+
+- [`test_data/README.md`](../../../test_data/README.md): fixture catalog, exact buffer values, regeneration workflow
+- [`.cursor/rules/rewrite-testing.mdc`](../../../.cursor/rules/rewrite-testing.mdc): oracle types, Catch2 tags, porting workflow
+- [`.cursor/rules/rewrite-buffer-contract.mdc`](../../../.cursor/rules/rewrite-buffer-contract.mdc): descriptor binding order for new shader tests
+
+## Purpose and scope
 
 The current suite is a host-first regression harness for the rewrite. It focuses
 on deterministic fixture data, shader build/profile consistency, Vulkan compute
@@ -14,7 +43,17 @@ end-to-end training, rendering, image quality, or full reference parity coverage
 Use this report when adding tests, reviewing gaps, or deciding whether a behavior
 is already protected by an automated check.
 
-## Test Execution Workflow
+## Test execution workflow
+
+**Prerequisites:** configured C++ compiler, Python, Vulkan SDK, `slangc`, and `glslc`.
+
+Paths below use PowerShell from the repo root.
+
+| Goal | Command |
+|------|---------|
+| Full Windows build and tests | `powershell -ExecutionPolicy Bypass -File next\nlrc_vksplat\scripts\build-windows.ps1 -Preset windows-debug -RunTests` |
+| Configure, build, and CTest | `cmake --preset windows-debug`, `cmake --build --preset windows-debug`, `ctest --preset windows-debug --output-on-failure` (from `next/nlrc_vksplat`) |
+| Fixture drift check | `python test_data\generate_fixtures.py --check` |
 
 Primary Windows workflow:
 
@@ -23,69 +62,99 @@ cd next\nlrc_vksplat
 powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1 -Preset windows-debug -RunTests
 ```
 
-Direct CMake workflow from a configured compiler environment:
-
-```powershell
-cd next\nlrc_vksplat
-cmake --preset windows-debug
-cmake --build --preset windows-debug
-ctest --preset windows-debug --output-on-failure
-```
-
-Fixture drift check:
-
-```powershell
-python test_data\generate_fixtures.py --check
-```
-
 CMake also registers `nlrc_vksplat_fixture_generation_check`, so fixture drift is
 validated by CTest when `BUILD_TESTING` is enabled. If `python` is not on `PATH`,
 use `scripts/build-windows.ps1 -PythonExe <path>` or configure CMake with
 `-DPython_EXECUTABLE=<path>`.
 
-## Coverage Matrix
+## Coverage matrix
 
-| Area | What is tested | Test entrypoints | Covered behavior |
-|------|----------------|------------------|------------------|
-| Test harness | Catch2 executable and CTest discovery | `test_main.cpp`, `tests/CMakeLists.txt` | Test binary links, Catch2 test cases are discovered, generator drift is registered as a separate CTest. |
-| Fixture generator | Synthetic fixture reproducibility | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check` | Generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte. |
-| Fixture catalog | Whole catalog validity | `test_fixture_catalog.cpp` | Every fixture/golden manifest loads, stage names match directories, build profile matches, bindings reference buffers, files exist, and file sizes match dtype/shape. |
-| Manifest parser | Manifest fields and rejection paths | `test_fixture_loader.cpp`, `fixture_manifest.cpp` | Supported dtype parsing, dtype sizes, invalid dtype rejection, malformed JSON rejection, empty or invalid shape rejection. |
-| Fixture loader | Typed raw-buffer loading | `test_fixture_loader.cpp`, `fixture_loader.cpp` | Typed float loading, missing buffer names, missing files, dtype mismatch, size mismatch, empty shape guards, little-endian `int32` payloads. |
-| Golden comparison | Float result comparison helpers | `test_golden_compare.cpp`, `golden_compare.cpp` | Epsilon pass/fail behavior, size mismatch diagnostics, NaN and infinity rejection. |
-| Build profile | Fixture and shader config profile checks | `test_manifest_profile.cpp`, `test_shader_config_profile.cpp` | `harness_smoke` fixture profile matches the build; generated shader config matches C++ constants and CMake profile toggles. |
-| GPU availability policy | Optional/required GPU behavior | `gpu_available.cpp`, GPU-tagged tests | `AUTO` skips when no Vulkan compute device is available, `REQUIRE` fails when unavailable, `OFF` skips GPU tests. |
-| Compute wrapper | Basic Vulkan compute wrapper validation | `test_gpu_smoke.cpp` | Embedded smoke shader dispatch; invalid SPIR-V; invalid push constant size; descriptor count, null binding, and unbound descriptor rejection. |
-| Utility shaders | Isolated GPU utility dispatches | `test_utility_shaders.cpp`, generated fixture data | `cumsum_single_pass`, `sum`, and `where` results match synthetic goldens, including cumsum near/exact block size, sum multi-block atomic accumulation, where no-write, first/last, and block-boundary cases. |
+| Area | Tag | What is tested | Test entrypoints | Covered behavior |
+|------|-----|----------------|------------------|------------------|
+| Test harness | `[host]` | Catch2 executable and CTest discovery | `test_main.cpp`, `tests/CMakeLists.txt` | Test binary links, Catch2 test cases are discovered, generator drift is registered as a separate CTest. |
+| Fixture generator | `[host]` | Synthetic fixture reproducibility | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check` | Generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte. |
+| Fixture catalog | `[host]` | Whole catalog validity | `test_fixture_catalog.cpp` | Every fixture/golden manifest loads, stage names match directories, build profile matches, bindings reference buffers, files exist, and file sizes match dtype/shape. |
+| Manifest parser | `[host]` | Manifest fields and rejection paths | `test_fixture_loader.cpp`, `fixture_manifest.cpp` | Supported dtype parsing, dtype sizes, invalid dtype rejection, malformed JSON rejection, empty or invalid shape rejection. |
+| Fixture loader | `[host]` | Typed raw-buffer loading | `test_fixture_loader.cpp`, `fixture_loader.cpp` | Typed float loading, missing buffer names, missing files, dtype mismatch, size mismatch, empty shape guards, little-endian `int32` payloads. |
+| Golden comparison | `[host]` | Float result comparison helpers | `test_golden_compare.cpp`, `golden_compare.cpp` | Epsilon pass/fail behavior, size mismatch diagnostics, NaN and infinity rejection. |
+| Build profile | `[host]` | Fixture and shader config profile checks | `test_manifest_profile.cpp`, `test_shader_config_profile.cpp` | `harness_smoke` fixture profile matches the build; generated shader config matches C++ constants and CMake profile toggles. |
+| GPU availability policy | `[host]` | Optional/required GPU behavior | `gpu_available.cpp`, GPU-tagged tests | `AUTO` skips when no Vulkan compute device is available, `REQUIRE` fails when unavailable, `OFF` skips GPU tests. See [GPU policy](#gpu-policy-and-reliability). |
+| Compute wrapper | `[gpu]` | Basic Vulkan compute wrapper validation | `test_gpu_smoke.cpp` | Embedded smoke shader dispatch; invalid SPIR-V; invalid push constant size; descriptor count, null binding, and unbound descriptor rejection. |
+| Utility shaders | `[gpu]` | Isolated Subgraph D utility dispatches | `test_utility_shaders.cpp`, generated fixture data | `cumsum_single_pass`, multi-phase cumsum, `sum`, and `where` match synthetic goldens; see [fixture catalog](#fixture-catalog) below. |
 
-## Fixture And Golden Data Coverage
+## Fixture and golden data coverage
 
-Synthetic fixture values are defined in `test_data/generate_fixtures.py`; checked-in
-`.bin` files and manifests are generated outputs. This keeps small binary fixtures
-available to CTest while making the source values reviewable and reproducible.
+Synthetic fixture values are defined in [`test_data/generate_fixtures.py`](../../../test_data/generate_fixtures.py);
+checked-in `.bin` files and manifests are generated outputs. This keeps small binary
+fixtures available to CTest while making the source values reviewable and reproducible.
 
-| Fixture stage | Covered behavior | Oracle type |
-|---------------|------------------|-------------|
-| `harness_smoke` | Host manifest, loader, and compare plumbing | Synthetic invariant |
-| `D_cumsum_single_pass` | Small signed inclusive prefix sum | Synthetic invariant |
-| `D_cumsum_single_pass_near_block` | Single-pass cumsum just below `VKSPLAT_CUMSUM_BLOCK_SIZE` | Synthetic invariant |
-| `D_cumsum_single_pass_exact_block` | Single-pass cumsum exactly at `VKSPLAT_CUMSUM_BLOCK_SIZE` | Synthetic invariant |
-| `D_sum` | Small integer reduction | Synthetic invariant |
-| `D_sum_multi_block` | Multi-workgroup sum with atomic accumulation | Synthetic invariant |
-| `D_where` | Basic mask compaction | Synthetic invariant |
-| `D_where_no_true` | No-write mask behavior preserves sentinel output | Synthetic invariant |
-| `D_where_first_last` | First-element and last-element output indices | Synthetic invariant |
-| `D_where_block_boundary` | Workgroup boundary behavior around `VKSPLAT_WHERE_BLOCK_SIZE` | Synthetic invariant |
+Per-buffer values and shader binding names live in [`test_data/README.md`](../../../test_data/README.md).
+All listed fixtures use synthetic invariant oracles unless noted otherwise in the catalog.
 
-Current fixture data is intentionally small. Large training dumps are avoided in
-git; curated reference-derived buffers should be minimal and should either be
-encoded in the generator or documented with source metadata.
+### Generated data assumptions
 
-## GPU Policy And Reliability
+The Python fixture generator mirrors shader sizing constants from
+[`next/nlrc_vksplat/src/nlrc_vksplat_config.hpp`](../src/nlrc_vksplat_config.hpp).
 
-Host tests are the reliable baseline and should pass on normal developer machines
-with a configured compiler, Python, Vulkan SDK, `slangc`, and `glslc`. GPU tests
-are controlled by `NLRC_VKSPLAT_GPU_TESTS`:
+#### Block-size mirrors
+
+| Utility | Python constant (`generate_fixtures.py`) | C++/shader constant (`nlrc_vksplat_config.hpp`) | Value |
+|---------|------------------------------------------|-------------------------------------------------|-------|
+| Cumsum | `CUMSUM_BLOCK_SIZE` | `VKSPLAT_CUMSUM_BLOCK_SIZE` | 512 |
+| Sum | `SUM_BLOCK_SIZE` | `VKSPLAT_SUM_BLOCK_SIZE` | 512 |
+| Where | `WHERE_BLOCK_SIZE` | `VKSPLAT_WHERE_BLOCK_SIZE` | 256 |
+
+#### Boundary input sizes
+
+Boundary coverage uses input lengths (or mask indices) derived from the block-size
+constants above.
+
+| Utility | Block symbol | Input-size formulas |
+|---------|--------------|---------------------|
+| Cumsum | `B` = `CUMSUM_BLOCK_SIZE` | `B - 1`, `B`, `B + 1`, `B * B + 1` |
+| Sum | `S` = `SUM_BLOCK_SIZE` | `S + 1` |
+| Where | `W` = `WHERE_BLOCK_SIZE` | mask length `W + 1`, true at `W - 1` and `W` |
+
+#### Fixture catalog
+
+| Fixture stage | Subgraph | Tag | Input size | Covered behavior |
+|---------------|----------|-----|------------|------------------|
+| `harness_smoke` | harness | `[host]` | 4 floats | Host manifest, loader, and compare plumbing |
+| `D_cumsum_single_pass` | D | `[gpu]` | 5 | Small signed inclusive prefix sum (`cumsum_single_pass`) |
+| `D_cumsum_single_pass_near_block` | D | `[gpu]` | `B - 1` | Single-pass cumsum just below `VKSPLAT_CUMSUM_BLOCK_SIZE` |
+| `D_cumsum_single_pass_exact_block` | D | `[gpu]` | `B` | Single-pass cumsum at `VKSPLAT_CUMSUM_BLOCK_SIZE` |
+| `D_cumsum_multi_block` | D | `[gpu]` | `B + 1` | One-level `block_scan` -> `scan_block_sums` -> `add_block_offsets` cumsum |
+| `D_cumsum_multi_block_two_level` | D | `[gpu]` | `B * B + 1` | Two-level cumsum path using `_cumsum_blockSums2` |
+| `D_sum` | D | `[gpu]` | 4 | Small integer reduction |
+| `D_sum_multi_block` | D | `[gpu]` | `S + 1` | Multi-workgroup sum with atomic accumulation |
+| `D_where` | D | `[gpu]` | 5 | Basic mask compaction |
+| `D_where_no_true` | D | `[gpu]` | 4 | No-write mask behavior preserves sentinel output |
+| `D_where_first_last` | D | `[gpu]` | 5 | First-element and last-element output indices |
+| `D_where_block_boundary` | D | `[gpu]` | `W + 1` | Workgroup boundary behavior around `VKSPLAT_WHERE_BLOCK_SIZE` |
+
+Current fixture data is intentionally small, except for
+`D_cumsum_multi_block_two_level`, which uses the `B * B + 1` input size (`B` =
+`CUMSUM_BLOCK_SIZE`); this is the minimum that crosses the second cumsum
+block-sums level.
+Large training dumps are avoided in git; curated reference-derived buffers should
+be minimal and should either be encoded in the generator or documented with
+source metadata.
+
+### When block sizes change
+
+Treat any change to `VKSPLAT_*_BLOCK_SIZE` as a fixture catalog change. Follow the
+regeneration checklist in [`test_data/README.md#when-block-sizes-change`](../../../test_data/README.md#when-block-sizes-change).
+
+Additional review items for this report:
+
+- Re-check generated binary sizes, especially `D_cumsum_multi_block_two_level`.
+- Revisit `.pre-commit-config.yaml` large-file exceptions if the two-level fixture grows.
+- Update this document if boundary formulas or covered fixture stages change.
+
+## GPU policy and reliability
+
+Host tests are the reliable baseline. GPU tests are controlled by
+`NLRC_VKSPLAT_GPU_TESTS`:
 
 | Policy | Behavior |
 |--------|----------|
@@ -96,35 +165,56 @@ are controlled by `NLRC_VKSPLAT_GPU_TESTS`:
 GPU tests validate correctness for small deterministic utility shader cases, not
 cross-device numerical stability, performance, or full rendering/training behavior.
 
-## Not Covered
+## Not covered
 
-| Area not covered | Status | Reason | Future plan |
-|------------------|--------|--------|-------------|
-| Full training pipeline parity with `ref/` | Future plan | Current rewrite tests target infrastructure and isolated utility shaders, not full model training. | Add curated reference parity fixtures after stable buffer dump contracts exist for representative training stages. |
-| Renderer/image-quality regression tests | Future plan | No rewrite renderer output oracle or image comparison harness is present. | Define small scene fixtures, image output format, and tolerated image metrics before adding render regression tests. |
-| Large real-world buffer dumps | Avoided | Large dumps are expensive, hard to review, and unsuitable for git. | Keep large dumps under `outputs/` or external storage; commit only minimal curated payloads with checksums and source metadata. |
-| Multi-phase cumsum pipeline | Future plan | Current tests cover `cumsum_single_pass`; block scan, block-sum scan, and offset phases are not dispatched together. | Add generated multi-block cumsum fixtures and a multi-dispatch harness when those phases are wired as a public utility path. |
-| Radix sort shader stages | Future plan | Current rewrite tests do not dispatch radix sort shaders. | Add key/value fixtures covering empty-like minimum sizes, single block, multi-block, duplicate keys, and sorted/reverse inputs after dispatch APIs are available. |
-| Remaining rewrite shader stages | Future plan | The suite covers only smoke, cumsum, sum, and where utility shaders. | Add one synthetic invariant fixture per new shader stage before adding ref-parity fixtures. |
-| OHOS runtime execution | Blocked | OHOS presets are cross-compile oriented; local CTest execution is disabled by default for OHOS. | Add device/emulator execution instructions and a CI lane before claiming runtime coverage. |
-| Performance/regression benchmarking | Avoided | Correctness tests are intentionally fast and deterministic; timing assertions would be flaky on developer machines. | Keep performance in dedicated benchmark tooling with explicit hardware/environment metadata. |
-| Memory lifetime, stress, and fault injection beyond wrapper checks | Future plan | Current wrapper tests cover argument validation, not repeated allocation stress, device loss, or allocation failures. | Add targeted stress tests behind an opt-in CTest label once resource limits and expected failure modes are defined. |
-| Cross-GPU numerical stability | Blocked | Requires multiple Vulkan devices/drivers and a tolerance policy beyond current exact integer fixtures. | Add hardware matrix reporting and float-heavy fixtures when rewrite kernels produce float outputs. |
-| Reference-derived binary conversion tool coverage | Future plan | `vkbd_to_bins.py` is used for curated ref data but is not covered by automated tests. | Add small synthetic `.vkbd` samples or pure parser unit tests before relying on it for parity fixture ingestion. |
+Status meanings: **Future plan** = planned work; **Blocked** = external dependency;
+**Avoided** = intentional non-goal.
 
-## Hardening Backlog
+### Future plan
+
+| Area | Notes |
+|------|-------|
+| Full training pipeline parity with `ref/` | Suite targets infrastructure and isolated utility shaders, not full model training. Add curated reference parity fixtures after stable buffer dump contracts exist. |
+| Renderer/image-quality regression tests | No rewrite renderer output oracle or image comparison harness. Define small scene fixtures, output format, and tolerated metrics first. |
+| Radix sort shader stages | No radix sort dispatches yet. Add key/value fixtures for minimum sizes, single block, multi-block, duplicate keys, and sorted/reverse inputs after dispatch APIs exist. |
+| Remaining rewrite shader stages | Only smoke, cumsum, sum, and where are covered. Add one synthetic invariant fixture per new stage before ref-parity fixtures. |
+| Memory lifetime, stress, and fault injection | Wrapper tests cover argument validation only. Add opt-in stress tests once resource limits and failure modes are defined. |
+| Reference-derived binary conversion tool coverage | `vkbd_to_bins.py` is not covered by automated tests. Add synthetic `.vkbd` samples or parser unit tests before parity ingestion. |
+
+### Blocked
+
+| Area | Notes |
+|------|-------|
+| OHOS runtime execution | OHOS presets are cross-compile oriented; local CTest is disabled by default. Needs device/emulator instructions and a CI lane. |
+| Cross-GPU numerical stability | Needs multiple Vulkan devices/drivers and a tolerance policy beyond exact integer fixtures. |
+
+### Avoided
+
+| Area | Notes |
+|------|-------|
+| Large real-world buffer dumps | Expensive, hard to review, unsuitable for git. Keep under `outputs/` or external storage; commit only minimal curated payloads. |
+| Performance/regression benchmarking | Correctness tests stay fast and deterministic. Keep timing in dedicated benchmark tooling with hardware metadata. |
+
+## Hardening backlog
+
+Optional improvements; not required for current test changes.
 
 - Add labels or presets that separate host-only, GPU-optional, GPU-required, and slow tests.
 - Expand manifest profile checks from `harness_smoke` to every generated fixture if build-profile variants are introduced.
 - Add generator unit tests for drift diagnostics, missing files, extra files, and malformed fixture specs.
+- If future cumsum block sizes make `B * B + 1` too large to commit, move the two-level cumsum case to generated-at-test-time data or introduce a dedicated small test shader profile.
 - Add reference-parity fixtures only after the buffer source, baseline tag, and expected tolerance are documented.
 - Add shader-stage coverage as new rewrite kernels become callable from tests.
 - Add CI documentation describing which jobs run host-only tests and which jobs require GPU hardware.
 
-## Gap Detection Rules
+## Gap detection rules
+
+Required checks when changing tests, fixtures, or documented coverage.
 
 - New public test helper behavior should have at least one host test.
 - New generated fixture data must come from `test_data/generate_fixtures.py` or document why it is curated separately.
+- Any change to `VKSPLAT_*_BLOCK_SIZE` must be reviewed as a fixture catalog change and followed by fixture regeneration plus drift checking.
+- Add a generator or CTest guard that parses `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` and fails if Python generator constants drift from C++ block-size defines.
 - New shader dispatch contracts should include descriptor order, push constants, fixture inputs, and expected outputs.
 - New floating-point comparisons must state epsilon and whether NaN/inf are valid or rejected.
 - New reference-derived tests must record the reference baseline tag and source of the dump.

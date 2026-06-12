@@ -111,6 +111,34 @@ def cumsum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCa
     )
 
 
+def cumsum_multi_block_case(stage_name: str, values: Iterable[int], notes: str, two_level: bool = False) -> FixtureCase:
+    input_values = tuple(values)
+    expected = prefix_sum(input_values)
+    block_sums_count = (len(input_values) + CUMSUM_BLOCK_SIZE - 1) // CUMSUM_BLOCK_SIZE
+    buffers = [
+        buffer_data("input", "int32", input_values),
+        buffer_data("output", "int32", [0] * len(input_values)),
+        buffer_data("block_sums", "int32", [0] * block_sums_count),
+    ]
+    bindings = ["input", "output", "block_sums"]
+
+    if two_level:
+        block_sums2_count = (block_sums_count + CUMSUM_BLOCK_SIZE - 1) // CUMSUM_BLOCK_SIZE
+        buffers.append(buffer_data("block_sums2", "int32", [0] * block_sums2_count))
+        bindings.append("block_sums2")
+
+    return FixtureCase(
+        stage_name=stage_name,
+        subgraph="D",
+        fixture_bindings=tuple(bindings),
+        fixture_buffers=tuple(buffers),
+        golden_bindings=("output",),
+        golden_buffers=(buffer_data("output", "int32", expected),),
+        fixture_notes=f"Synthetic Subgraph D utility fixture for {notes}",
+        golden_notes=f"Synthetic Subgraph D utility golden for {notes}",
+    )
+
+
 def sum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCase:
     input_values = tuple(values)
     return FixtureCase(
@@ -152,6 +180,8 @@ def where_case(stage_name: str, mask: Iterable[int], initial_fill: int, notes: s
 def fixture_cases() -> tuple[FixtureCase, ...]:
     near_block_values = tuple((index % 7) - 3 for index in range(CUMSUM_BLOCK_SIZE - 1))
     exact_block_values = tuple(1 for _ in range(CUMSUM_BLOCK_SIZE))
+    multi_block_values = tuple((index % 11) - 5 for index in range(CUMSUM_BLOCK_SIZE + 1))
+    two_level_values = tuple((index % 5) - 2 for index in range((CUMSUM_BLOCK_SIZE * CUMSUM_BLOCK_SIZE) + 1))
     where_boundary_mask = tuple(1 if index in (WHERE_BLOCK_SIZE - 1, WHERE_BLOCK_SIZE) else 0 for index in range(WHERE_BLOCK_SIZE + 1))
 
     return (
@@ -175,6 +205,17 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
             "D_cumsum_single_pass_exact_block",
             exact_block_values,
             "exact-block cumsum_single_pass shader testing",
+        ),
+        cumsum_multi_block_case(
+            "D_cumsum_multi_block",
+            multi_block_values,
+            "multi-block cumsum shader testing",
+        ),
+        cumsum_multi_block_case(
+            "D_cumsum_multi_block_two_level",
+            two_level_values,
+            "two-level multi-block cumsum shader testing",
+            two_level=True,
         ),
         sum_case("D_sum", [1, 0, 2, 3], "isolated sum shader testing"),
         sum_case("D_sum_multi_block", [1] * (SUM_BLOCK_SIZE + 1), "multi-block sum shader testing"),

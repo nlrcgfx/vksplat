@@ -1,0 +1,36 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "D_cumsum_multi_block",
+  "subgraph": "D",
+  "bindings": [
+    "input",
+    "output",
+    "block_sums"
+  ],
+  "buffers": {
+    "input": "input.bin",
+    "output": "output.bin",
+    "block_sums": "block_sums.bin"
+  },
+  "shapes": {
+    "input": [
+      513
+    ],
+    "output": [
+      513
+    ],
+    "block_sums": [
+      2
+    ]
+  },
+  "dtypes": {
+    "input": "int32",
+    "output": "int32",
+    "block_sums": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "notes": "Synthetic Subgraph D utility fixture for multi-block cumsum shader testing"
+}
