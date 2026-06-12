@@ -25,6 +25,7 @@ class CompileConfig:
     shader_dst_path: Path
     generated_dir: Path
     config_header_path: Path
+    stamp_path: Path | None = None
     slangc_compile_args: list[str] = field(
         default_factory=lambda: ["-stage", "compute", "-O", "-fp-mode", "fast", "-line-directive-mode", "none"]
     )
@@ -123,13 +124,25 @@ class ShaderCompiler:
         raise RuntimeError("glslc not found. Install the Vulkan SDK or pass --glslc")
 
     def _create_shader_jobs(self) -> list[ShaderSource]:
-        # Add kernel jobs here as stages are ported (Phase 1+).
         return [
             ShaderSource(source="smoke.slang", language="slang", jobs=[ShaderJob("smoke", {})]),
+            ShaderSource(
+                source="cumsum.slang",
+                language="slang",
+                jobs=[
+                    ShaderJob("cumsum_single_pass", {"CUMSUM_PHASE": 0}),
+                    ShaderJob("cumsum_block_scan", {"CUMSUM_PHASE": 1}),
+                    ShaderJob("cumsum_scan_block_sums", {"CUMSUM_PHASE": 2}),
+                    ShaderJob("cumsum_add_block_offsets", {"CUMSUM_PHASE": 3}),
+                ],
+                deps=["config.slang"],
+            ),
+            ShaderSource(source="sum.slang", language="slang", jobs=[ShaderJob("sum", {})], deps=["config.slang"]),
+            ShaderSource(source="where.slang", language="slang", jobs=[ShaderJob("where", {})], deps=["config.slang"]),
         ]
 
-    def _compile_slang_job(self, source_file: str, job: ShaderJob) -> Path:
-        source_path = self.config.slang_src_path / source_file
+    def _compile_slang_job(self, source: ShaderSource, job: ShaderJob) -> Path:
+        source_path = self.config.slang_src_path / source.source
         spirv_path = self.config.generated_dir / f"{job.name}.spv"
         header_path = self.config.generated_dir / f"{job.name}_spirv.hpp"
 
@@ -153,22 +166,62 @@ class ShaderCompiler:
         self.manifest_modules.append(
             {
                 "name": job.name,
-                "source": source_file,
+                "source": source.source,
+                "language": source.language,
                 "header": header_path.name,
                 "array_symbol": array_symbol,
                 "word_count_symbol": word_count_symbol,
                 "defines": job.defines,
+                "deps": source.deps,
+            }
+        )
+        return header_path
+
+    def _compile_glsl_job(self, source: ShaderSource, job: ShaderJob) -> Path:
+        source_path = self.config.shader_dst_path / source.source
+        spirv_path = self.config.generated_dir / f"{job.name}.spv"
+        header_path = self.config.generated_dir / f"{job.name}_spirv.hpp"
+
+        cmd = [str(self.glslc), str(source_path)]
+        for define, value in job.defines.items():
+            cmd.append(f"-D{define}={value}")
+        cmd.extend(self.config.glslc_compile_args)
+        cmd.extend(["-I", str(self.config.generated_dir)])
+        cmd.extend(["-I", str(self.config.shader_dst_path)])
+        cmd.extend(["-o", str(spirv_path)])
+
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        header_path.write_text(
+            spirv_to_header(spirv_path.read_bytes(), job.name),
+            encoding="utf-8",
+        )
+        spirv_path.unlink(missing_ok=True)
+
+        array_symbol, word_count_symbol = spirv_symbols(job.name)
+        self.manifest_modules.append(
+            {
+                "name": job.name,
+                "source": source.source,
+                "language": source.language,
+                "header": header_path.name,
+                "array_symbol": array_symbol,
+                "word_count_symbol": word_count_symbol,
+                "defines": job.defines,
+                "deps": source.deps,
             }
         )
         return header_path
 
     def compile_all(self) -> None:
         for source in self._create_shader_jobs():
-            if source.language != "slang":
-                raise ValueError(f"Unsupported shader language for {source.source}: {source.language}")
             for job in source.jobs:
                 print(f">>> Compiling {source.source} ({job.name})")
-                header_path = self._compile_slang_job(source.source, job)
+                if source.language == "slang":
+                    header_path = self._compile_slang_job(source, job)
+                elif source.language == "glsl":
+                    header_path = self._compile_glsl_job(source, job)
+                else:
+                    raise ValueError(f"Unsupported shader language for {source.source}: {source.language}")
                 print(f"[OK] Wrote {header_path.name}")
 
         manifest = {
@@ -180,6 +233,11 @@ class ShaderCompiler:
         manifest_path = self.config.generated_dir / "shader_manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         print(f"[OK] Wrote {manifest_path.name}")
+
+        if self.config.stamp_path is not None:
+            self.config.stamp_path.parent.mkdir(parents=True, exist_ok=True)
+            self.config.stamp_path.write_text("ok\n", encoding="utf-8")
+            print(f"[OK] Wrote {self.config.stamp_path.name}")
 
 
 def main() -> int:
@@ -198,6 +256,7 @@ def main() -> int:
     )
     parser.add_argument("--slangc", type=Path, default=None)
     parser.add_argument("--glslc", type=Path, default=None)
+    parser.add_argument("--stamp", type=Path, default=None, help="Stable stamp output for CMake dependency tracking")
     parser.add_argument("--emulate-int64", type=int, choices=[0, 1], required=True)
     parser.add_argument("--emulate-f32-atomic", type=int, choices=[0, 1], required=True)
     args = parser.parse_args()
@@ -208,13 +267,13 @@ def main() -> int:
         if args.generated_dir is not None
         else (project_dir / "build" / "generated")
     )
-
     config = CompileConfig(
         project_dir=project_dir,
         slang_src_path=project_dir / "slang",
         shader_dst_path=project_dir / "shader",
         generated_dir=generated_dir,
         config_header_path=project_dir / "src" / "nlrc_vksplat_config.hpp",
+        stamp_path=args.stamp.resolve() if args.stamp is not None else None,
         slangc_path=args.slangc,
         glslc_path=args.glslc,
         emulate_int64=args.emulate_int64,

@@ -39,14 +39,7 @@ target_link_libraries(nlrc_vksplat_gpu PRIVATE
   nlrc_vksplat_compile_options
 )
 
-if(TARGET nlrc_vksplat_shaders)
-  add_dependencies(nlrc_vksplat_gpu nlrc_vksplat_shaders)
-  target_include_directories(nlrc_vksplat_gpu PRIVATE ${NLRC_VKSPLAT_SHADER_GENERATED_DIR})
-  target_compile_definitions(nlrc_vksplat_gpu PUBLIC
-    VKSPLAT_USE_EMULATED_INT64=${NLRC_VKSPLAT_USE_EMULATED_INT64_VALUE}
-    VKSPLAT_USE_EMULATED_F32_ATOMIC=${NLRC_VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
-  )
-endif()
+nlrc_vksplat_apply_shader_profile(nlrc_vksplat_gpu)
 
 function(nlrc_vksplat_setup_tests)
   if(NOT NLRC_VKSPLAT_BUILD_TESTS)
@@ -96,6 +89,7 @@ function(nlrc_vksplat_setup_tests)
     tests/test_golden_compare.cpp
     tests/test_gpu_smoke.cpp
     tests/test_manifest_profile.cpp
+    tests/test_shader_config_profile.cpp
     tests/support/fixture_manifest.cpp
     tests/support/fixture_loader.cpp
     tests/support/golden_compare.cpp
@@ -113,11 +107,12 @@ function(nlrc_vksplat_setup_tests)
   target_compile_definitions(nlrc_vksplat_tests PRIVATE
     NLRC_VKSPLAT_TEST_DATA_DIR="${NLRC_VKSPLAT_TEST_DATA_DIR}"
     NLRC_VKSPLAT_GPU_TEST_POLICY=${_NLRC_VKSPLAT_GPU_POLICY_VALUE}
+    NLRC_VKSPLAT_SHADER_CONFIG_JSON="${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/shader_config.json"
+    NLRC_VKSPLAT_SHADER_GENERATED_DIR="${NLRC_VKSPLAT_SHADER_GENERATED_DIR}"
   )
 
   if(TARGET nlrc_vksplat_shaders)
-    add_dependencies(nlrc_vksplat_tests nlrc_vksplat_shaders)
-    target_include_directories(nlrc_vksplat_tests PRIVATE ${NLRC_VKSPLAT_SHADER_GENERATED_DIR})
+    nlrc_vksplat_link_shaders(nlrc_vksplat_tests)
   endif()
 
   include(Catch)

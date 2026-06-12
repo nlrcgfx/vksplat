@@ -286,10 +286,7 @@ def _build_json(values: dict[str, int], tensor_configs: list[dict[str, int]]) ->
         "use_emulated_f32_atomic": values["VKSPLAT_USE_EMULATED_F32_ATOMIC"],
         "sorting_key_bits": values["VKSPLAT_SORTING_KEY_BITS"],
         "rect_tile_space_words": values["VKSPLAT_RECT_TILE_SPACE_WORDS"],
-        "shader_requires_int64": int(
-            (values["VKSPLAT_USE_EMULATED_INT64"] == 0)
-            or (values["VKSPLAT_SORTING_KEY_BITS"] == 64)
-        ),
+        "shader_requires_int64": values["VKSPLAT_SHADER_REQUIRES_INT64"],
         "radix_sort_radix": values["VKSPLAT_RADIX_SORT_RADIX"],
         "radix_workgroup_size": values["VKSPLAT_RADIX_WORKGROUP_SIZE"],
         "radix_partition_division": values["VKSPLAT_RADIX_PARTITION_DIVISION"],
@@ -302,9 +299,21 @@ def _build_json(values: dict[str, int], tensor_configs: list[dict[str, int]]) ->
 def _apply_overrides(values: dict[str, int], emulate_int64: int | None, emulate_f32_atomic: int | None) -> None:
     if emulate_int64 is not None:
         values["VKSPLAT_USE_EMULATED_INT64"] = int(emulate_int64)
-        values["VKSPLAT_RECT_TILE_SPACE_WORDS"] = 2 if emulate_int64 else 1
     if emulate_f32_atomic is not None:
         values["VKSPLAT_USE_EMULATED_F32_ATOMIC"] = int(emulate_f32_atomic)
+
+
+def _recompute_derived_values(values: dict[str, int]) -> None:
+    values["VKSPLAT_TILE_SIZE"] = values["VKSPLAT_TILE_HEIGHT"] * values["VKSPLAT_TILE_WIDTH"]
+    values["VKSPLAT_SH_REORDER_SIZE"] = values["VKSPLAT_SUBGROUP_SIZE"]
+    values["VKSPLAT_RECT_TILE_SPACE_WORDS"] = 2 if values["VKSPLAT_USE_EMULATED_INT64"] else 1
+    values["VKSPLAT_SHADER_REQUIRES_INT64"] = int(
+        (values["VKSPLAT_USE_EMULATED_INT64"] == 0) or (values["VKSPLAT_SORTING_KEY_BITS"] == 64)
+    )
+    values["VKSPLAT_RADIX_PARTITION_SIZE"] = (
+        values["VKSPLAT_RADIX_PARTITION_DIVISION"] * values["VKSPLAT_RADIX_WORKGROUP_SIZE"]
+    )
+    values["VKSPLAT_MORTON_STATS_THREADS"] = values["VKSPLAT_SUBGROUP_SIZE"] * values["VKSPLAT_SUBGROUP_SIZE"]
 
 
 def generate_shader_config(
@@ -319,6 +328,7 @@ def generate_shader_config(
     defines = _parse_defines(header)
     values = _resolve_defines(defines)
     _apply_overrides(values, emulate_int64, emulate_f32_atomic)
+    _recompute_derived_values(values)
     tensor_configs = _tensor_configs(values)
 
     outputs = {

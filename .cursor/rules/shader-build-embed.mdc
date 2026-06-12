@@ -13,9 +13,9 @@ Applies to the rewrite under `next/nlrc_vksplat/`. Unlike ref, the rewrite embed
 | Layer | Role |
 |-------|------|
 | `nlrc_vksplat_config.hpp` | Numeric `VKSPLAT_*` constants in `#define` form for the generator, plus C++ constexpr mirrors |
-| CMake options | Profile subset only: `NLRC_VKSPLAT_EMULATE_INT64`, `NLRC_VKSPLAT_EMULATE_F32_ATOMIC` |
-| `nlrc_vksplat_link_shaders(target)` | Adds shader dependency, generated include dir, and emulation compile definitions |
-| `nlrc_vksplat_gpu` | Also receives emulation compile definitions when `nlrc_vksplat_shaders` exists |
+| CMake options | Profile subset only: `NLRC_VKSPLAT_EMULATE_INT64`, `NLRC_VKSPLAT_EMULATE_F32_ATOMIC`; propagated to C++ compile definitions and generated shader config |
+| `nlrc_vksplat_apply_shader_profile(target)` | Adds `VKSPLAT_USE_EMULATED_INT64` and `VKSPLAT_USE_EMULATED_F32_ATOMIC` compile definitions |
+| `nlrc_vksplat_link_shaders(target)` | Applies shader profile, adds shader dependency, and adds generated include dir |
 
 Do not duplicate tile sizes, workgroup sizes, or tensor-bwd tables as CMake options.
 
@@ -30,7 +30,7 @@ It:
 3. Emits embedded SPIR-V headers.
 4. Writes `shader_manifest.json`.
 
-CMake target `nlrc_vksplat_shaders` invokes the script. Configure requires Python, `slangc`, and `glslc`.
+CMake target `nlrc_vksplat_shaders` invokes the script and passes only the emulation profile toggles as config overrides. Configure requires Python, `slangc`, and `glslc`.
 
 ## Generated Artifacts
 
@@ -44,9 +44,11 @@ All generated shader artifacts live under `${CMAKE_BINARY_DIR}/generated/` and a
 
 Per-preset build trees such as `build/windows-debug/` and `build/ohos-debug/` isolate profiles. Do not add runtime shader search paths.
 
+Host tests may read `NLRC_VKSPLAT_SHADER_CONFIG_JSON` to verify generated shader config matches the active C++ build profile.
+
 ## Embed Header Contract
 
-Each `*_spirv.hpp` is emitted by `spirv_to_header()` and verified with blocking clang-format plus clang-tidy at shader build time.
+Each `*_spirv.hpp` is emitted by `spirv_to_header()` at shader build time. The shader build does not run clang-format or clang-tidy; C++ lint is handled by repo-root pre-commit hooks.
 
 | Job name | Array symbol | Word-count symbol |
 |----------|--------------|-------------------|

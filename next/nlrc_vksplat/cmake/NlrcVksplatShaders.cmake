@@ -22,49 +22,63 @@ set(NLRC_VKSPLAT_SHADER_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 set(NLRC_VKSPLAT_SHADER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/scripts/compile_shaders.py")
 set(NLRC_VKSPLAT_CONFIG_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/nlrc_vksplat_config.hpp")
 set(NLRC_VKSPLAT_SHADER_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_shader_config.py")
+set(NLRC_VKSPLAT_SHADER_STAMP "${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/nlrc_vksplat_shaders.stamp")
+set(NLRC_VKSPLAT_SLANG_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/slang/config.slang")
 set(NLRC_VKSPLAT_SMOKE_SLANG "${CMAKE_CURRENT_SOURCE_DIR}/slang/smoke.slang")
-
-set(NLRC_VKSPLAT_SHADER_OUTPUTS
-  "${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/config_generated.slang"
-  "${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/config_generated.glsl"
-  "${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/shader_config.json"
-  "${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/shader_manifest.json"
-  "${NLRC_VKSPLAT_SHADER_GENERATED_DIR}/smoke_spirv.hpp"
-)
+set(NLRC_VKSPLAT_CUMSUM_SLANG "${CMAKE_CURRENT_SOURCE_DIR}/slang/cumsum.slang")
+set(NLRC_VKSPLAT_SUM_SLANG "${CMAKE_CURRENT_SOURCE_DIR}/slang/sum.slang")
+set(NLRC_VKSPLAT_WHERE_SLANG "${CMAKE_CURRENT_SOURCE_DIR}/slang/where.slang")
+set(NLRC_VKSPLAT_RADIX_CONFIG_GLSL "${CMAKE_CURRENT_SOURCE_DIR}/shader/radix_sort/config.glsl")
 
 add_custom_command(
-  OUTPUT ${NLRC_VKSPLAT_SHADER_OUTPUTS}
+  OUTPUT ${NLRC_VKSPLAT_SHADER_STAMP}
   COMMAND
     ${Python_EXECUTABLE}
     ${NLRC_VKSPLAT_SHADER_SCRIPT}
     --project-dir ${CMAKE_CURRENT_SOURCE_DIR}
-    --build-dir ${CMAKE_BINARY_DIR}
     --generated-dir ${NLRC_VKSPLAT_SHADER_GENERATED_DIR}
     --emulate-int64 ${NLRC_VKSPLAT_USE_EMULATED_INT64_VALUE}
     --emulate-f32-atomic ${NLRC_VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
     --slangc ${NLRC_VKSPLAT_SLANGC}
     --glslc ${NLRC_VKSPLAT_GLSLC}
+    --stamp ${NLRC_VKSPLAT_SHADER_STAMP}
   DEPENDS
     ${NLRC_VKSPLAT_SHADER_SCRIPT}
     ${NLRC_VKSPLAT_SHADER_GENERATOR}
     ${NLRC_VKSPLAT_CONFIG_HEADER}
+    ${NLRC_VKSPLAT_SLANG_CONFIG}
     ${NLRC_VKSPLAT_SMOKE_SLANG}
+    ${NLRC_VKSPLAT_CUMSUM_SLANG}
+    ${NLRC_VKSPLAT_SUM_SLANG}
+    ${NLRC_VKSPLAT_WHERE_SLANG}
+    ${NLRC_VKSPLAT_RADIX_CONFIG_GLSL}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMENT "Generating shader config and embedded SPIR-V headers"
   VERBATIM
 )
 
-add_custom_target(nlrc_vksplat_shaders DEPENDS ${NLRC_VKSPLAT_SHADER_OUTPUTS})
+add_custom_target(nlrc_vksplat_shaders DEPENDS ${NLRC_VKSPLAT_SHADER_STAMP})
+
+function(nlrc_vksplat_apply_shader_profile target)
+  if(NOT TARGET ${target})
+    message(FATAL_ERROR "nlrc_vksplat_apply_shader_profile: target ${target} does not exist")
+  endif()
+
+  target_compile_definitions(${target} PUBLIC
+    VKSPLAT_USE_EMULATED_INT64=${NLRC_VKSPLAT_USE_EMULATED_INT64_VALUE}
+    VKSPLAT_USE_EMULATED_F32_ATOMIC=${NLRC_VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
+  )
+endfunction()
 
 function(nlrc_vksplat_link_shaders target)
   if(NOT TARGET nlrc_vksplat_shaders)
     message(FATAL_ERROR "nlrc_vksplat_shaders target is not defined")
   endif()
+  if(NOT TARGET ${target})
+    message(FATAL_ERROR "nlrc_vksplat_link_shaders: target ${target} does not exist")
+  endif()
 
+  nlrc_vksplat_apply_shader_profile(${target})
   add_dependencies(${target} nlrc_vksplat_shaders)
   target_include_directories(${target} PRIVATE ${NLRC_VKSPLAT_SHADER_GENERATED_DIR})
-  target_compile_definitions(${target} PUBLIC
-    VKSPLAT_USE_EMULATED_INT64=${NLRC_VKSPLAT_USE_EMULATED_INT64_VALUE}
-    VKSPLAT_USE_EMULATED_F32_ATOMIC=${NLRC_VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}
-  )
 endfunction()
