@@ -1,0 +1,32 @@
+---
+description: Catch2 golden-master GPU tests and test_data layout
+globs: next/**/test/**,test_data/**
+alwaysApply: false
+---
+
+# Golden-Master Testing (Catch2)
+
+Data-driven validation — no GPU mocking.
+
+## Layout
+
+- Golden binaries: `test_data/golden_masters/` (committed, small curated sets)
+- Source material: ref `.vkbd` dumps from `vksplat_train --dump-buffers` (build with `VKSPLAT_ENABLE_BUFFER_DUMPS=ON`)
+- Inspect/compare dumps: `ref/vksplat/scripts/vkbd_tool.py inspect` / `compare`
+
+## Per-pipeline test pattern
+
+For each compute stage (see `ref/docs/shader-pipeline.md` subgraphs A–G):
+
+1. Load raw binary into a Vulkan input buffer
+2. Dispatch the specific compute pipeline
+3. Copy the output buffer to host
+4. Assert equality against the golden binary (default epsilon: `1e-5`, configurable per dtype)
+
+## When to write tests
+
+Add or update a golden-master test when porting or adding any compute dispatch listed in the shader pipeline doc.
+
+## Comparison semantics
+
+Follow `.vkbd` structured layout: shape, dtype, and capacity metadata. Prefer converting curated goldens to raw binary fixtures in `test_data/golden_masters/` for fast Catch2 loads.

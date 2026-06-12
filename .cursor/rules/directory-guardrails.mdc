@@ -1,0 +1,28 @@
+---
+description: Directory boundaries — ref is read-only, rewrite is isolated
+alwaysApply: true
+---
+
+# Directory & Structural Guardrails
+
+## Ref is read-only
+
+- Ground truth: `ref/vksplat/` (baseline tag `ref-baseline-2026-06-12`)
+- Use for behavior comparison, shader reference, and generating `.vkbd` golden dumps
+- **CRITICAL:** Never propose, write, or execute edits under `ref/` unless the user explicitly requests a critical baseline bugfix
+- Do not add features, refactors, or OHOS port work in `ref/`
+
+## Rewrite boundary
+
+- All implementation lives in `next/nlrc_vksplat/`
+- `next/nlrc_vksplat/CMakeLists.txt` must remain fully decoupled from `ref/vksplat/CMakeLists.txt`
+- Never `add_subdirectory(../ref/...)` or link against `ref/vksplat` targets
+
+## Shared assets
+
+- Committed regression data: `test_data/` at repo root
+- Runtime training output: `outputs/` (gitignored)
+
+## Build artifacts
+
+Do not stage: `ref/vksplat/build/`, `.slangtorch_cache`, `__pycache__/`. See `git-commits` rule for commit workflow.

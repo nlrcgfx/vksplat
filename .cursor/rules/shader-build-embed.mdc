@@ -1,0 +1,41 @@
+---
+description: CMake-time shader compile and embedded SPIR-V headers
+globs: next/**/*.{slang,comp,glsl,cmake,txt}
+alwaysApply: false
+---
+
+# Shader & Build Integration
+
+Applies to the rewrite (`next/nlrc_vksplat/`). Differs from ref, which loads `.spv` from disk at runtime.
+
+## Build-time compilation
+
+1. CMake compiles shaders to SPIR-V at build time
+2. SPIR-V converts to C++ headers as `uint32_t` bytecode arrays
+3. C++ includes the generated header and passes the array to `VkShaderModuleCreateInfo`
+
+```cpp
+// BAD — runtime disk load (ref pattern, not for rewrite)
+createComputePipeline(pipeline, "shader/generated/foo.spv");
+
+// GOOD — embedded bytecode
+#include "generated/foo_spirv.hpp"
+createShaderModule(std::vector<uint32_t>(foo_spirv, foo_spirv + foo_spirv_len), &module);
+```
+
+## Shader languages
+
+- Slang: all core compute kernels
+- GLSL 460: radix sort only (`shader/radix_sort/*.comp`)
+
+## Config propagation
+
+`vksplat_config.h` drives `VKSPLAT_*` constants. Port or reuse logic from `ref/vksplat/scripts/generate_shader_config.py` to emit Slang/GLSL fragments and `shader_config.json`.
+
+## CMake dependencies
+
+Editing `.slang`, `.comp`, or `.glsl` must rebuild the generated header and any C++ TU that includes it.
+
+## Porting reference
+
+Shader sources to port from: `ref/vksplat/slang/` and `ref/vksplat/shader/radix_sort/`.

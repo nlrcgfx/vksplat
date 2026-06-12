@@ -1,0 +1,39 @@
+---
+description: C++17 and mobile-first Vulkan standards for the rewrite
+globs: next/**/*.{h,hpp,cpp,cxx}
+alwaysApply: false
+---
+
+# C++ & Vulkan Standards (Mobile-First)
+
+Applies to `next/nlrc_vksplat/` only.
+
+## Language & platform
+
+- C++17
+- Headless Vulkan in `next/nlrc_vksplat/src/` — no Win32, XCB, or other windowing APIs in core library code
+
+## Memory alignment (ARM64)
+
+Mobile GPUs are sensitive to alignment. Host/device structs, push constants (max 192 bytes), and storage-buffer layouts must strictly match `std430`. Mirror layouts in C++ with `alignas()` — do not rely on `PACK_STRUCT` or implicit packing from the reference.
+
+## Vulkan extensions
+
+- Prefer core Vulkan 1.2 and universally supported extensions
+- Make desktop-only extensions optional (e.g. `VK_EXT_subgroup_size_control` must not be required on OHOS)
+
+## Maleoon 910 profile (audit every port)
+
+- Compute workgroup sizes ≤ 512
+- Subgroup size 64 (not 32)
+- Enable `VKSPLAT_USE_EMULATED_INT64` and `VKSPLAT_USE_EMULATED_F32_ATOMIC` when hardware lacks native support
+
+## Descriptor model
+
+- Descriptor set 0: sequential `VK_DESCRIPTOR_TYPE_STORAGE_BUFFER` bindings 0..N-1
+- Push constants: camera, step, learning rates, image size, etc.
+- No textures — all data in storage buffers
+
+## Abstractions
+
+Reuse rewrite abstractions once introduced (`VulkanGSPipeline`, `_VulkanBuffer`, `Buffer<T>`, `_ComputePipeline`). Do not copy ref internals (`PACK_STRUCT`, `_THROW_ERROR`) without reason.

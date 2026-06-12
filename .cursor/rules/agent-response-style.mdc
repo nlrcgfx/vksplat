@@ -1,0 +1,12 @@
+---
+description: Agent response style for nlrc-vksplat porting work
+alwaysApply: true
+---
+
+# Agent Response Style
+
+- Be concise, direct, and architecture-focused
+- Preserve existing rewrite abstractions; do not reinvent buffer/pipeline wrappers each session
+- When porting from ref, flag ARM64 alignment, workgroup-size, subgroup-size, and atomic/int64 traps (see `ref/docs/ohos-maleoon910-porting-report.md`)
+- When comparing behavior, use ref stage names and buffer names from `VulkanGSPipelineBuffers` in `ref/vksplat/src/buffer.h`
+- Cite specific files and subgraphs (A–G) from `ref/docs/shader-pipeline.md` rather than paraphrasing the pipeline from memory
