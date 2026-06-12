@@ -12,8 +12,7 @@ function(nlrc_vksplat_add_compile_commands_sync_target)
   set(_nlrc_vksplat_compile_commands_source "${CMAKE_BINARY_DIR}/compile_commands.json")
   set(_nlrc_vksplat_compile_commands_destination "${PROJECT_SOURCE_DIR}/build/compile_commands.json")
 
-  set(_nlrc_vksplat_sync_compile_commands_script
-    "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/NlrcVksplatSyncCompileCommands.cmake")
+  set(_nlrc_vksplat_sync_compile_commands_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/NlrcVksplatSyncCompileCommands.cmake")
 
   add_custom_target(nlrc_vksplat_sync_compile_commands ALL
     COMMAND

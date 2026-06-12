@@ -5,22 +5,40 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(NLRC_VKSPLAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+  # Suppress -gcc-toolchain warnings from OHOS SDK
   add_compile_options(-Qunused-arguments)
 endif()
 
-option(NLRC_VKSPLAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
-
 include(cmake/NlrcVksplatWarnings.cmake)
 include(cmake/NlrcVksplatCompileOptions.cmake)
+
+# Shader build and embedded SPIR-V headers
 include(cmake/NlrcVksplatShaders.cmake)
 
 find_package(Vulkan REQUIRED)
 
 add_library(nlrc_vksplat_core STATIC)
 
-target_sources(nlrc_vksplat_core PRIVATE src/version.cpp)
-target_include_directories(nlrc_vksplat_core PUBLIC src)
+target_sources(nlrc_vksplat_core
+  PRIVATE
+    src/gpu/compute_pipeline.cpp
+    src/gpu/headless_context.cpp
+    src/gpu/storage_buffer.cpp
+    src/vulkan_check.hpp
+  PUBLIC
+    FILE_SET HEADERS
+    BASE_DIRS src
+    FILES
+      src/gpu/constants.hpp
+      src/gpu/compute_pipeline.hpp
+      src/gpu/headless_context.hpp
+      src/gpu/storage_buffer.hpp
+      src/nlrc_vksplat_config.hpp
+      src/span.hpp
+)
 
 target_link_libraries(nlrc_vksplat_core PUBLIC Vulkan::Vulkan)
 
@@ -29,14 +47,15 @@ target_link_libraries(nlrc_vksplat_core PRIVATE
   nlrc_vksplat_compile_options
 )
 
-nlrc_vksplat_link_shaders(nlrc_vksplat_core)
+# Apply shader profile to the core library
+nlrc_vksplat_apply_shader_profile(nlrc_vksplat_core)
 
 include(cmake/NlrcVksplatTests.cmake)
 if(NLRC_VKSPLAT_BUILD_TESTS)
   include(CTest)
   enable_testing()
+  nlrc_vksplat_setup_tests()
 endif()
-nlrc_vksplat_setup_tests()
 
 # Sync compile commands for clangd and other tools
 include(cmake/NlrcVksplatCompileCommands.cmake)
