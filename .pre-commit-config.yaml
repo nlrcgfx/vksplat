@@ -1,0 +1,44 @@
+repos:
+  - repo: local
+    hooks:
+      - id: nlrc-vksplat-clang-format
+        name: nlrc-vksplat clang-format full tree
+        entry: python tools/pre_commit_nlrc_vksplat_lint.py format
+        language: python
+        always_run: true
+        pass_filenames: false
+      - id: nlrc-vksplat-clang-tidy
+        name: nlrc-vksplat clang-tidy full tree
+        entry: python tools/pre_commit_nlrc_vksplat_lint.py tidy
+        language: python
+        always_run: true
+        pass_filenames: false
+      - id: nlrc-check-trailing-whitespace
+        name: nlrc check trailing whitespace
+        entry: python tools/pre_commit_repo_hygiene.py trailing-whitespace
+        language: python
+        exclude: ^ref/
+      - id: nlrc-check-final-newline
+        name: nlrc check final newline
+        entry: python tools/pre_commit_repo_hygiene.py final-newline
+        language: python
+        exclude: ^ref/
+      - id: nlrc-check-merge-conflict
+        name: nlrc check merge conflicts
+        entry: python tools/pre_commit_repo_hygiene.py merge-conflict
+        language: python
+      - id: nlrc-check-large-files
+        name: nlrc check large files
+        entry: python tools/pre_commit_repo_hygiene.py large-files --max-kib 1024
+        language: python
+        exclude: ^ref/vksplat/contrib/.*\.(tar\.gz|zip)$
+      - id: nlrc-check-json
+        name: nlrc check JSON syntax
+        entry: python tools/pre_commit_repo_hygiene.py json
+        language: python
+        files: \.json$
+      - id: nlrc-check-toml
+        name: nlrc check TOML syntax
+        entry: python tools/pre_commit_repo_hygiene.py toml
+        language: python
+        files: \.toml$
