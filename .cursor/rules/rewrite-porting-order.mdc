@@ -78,6 +78,7 @@ Tiny scene and loss trend after isolated subgraph gates pass.
 - Do not wire `train_step` until Phases 3-7 gates pass.
 - Do not skip Phases 1-2 to test rasterize first.
 - Mark stages done using SPIR-V names from the shader-pipeline shader index.
+- A stage is not done until `test_data/README.md` documents fixture/golden meaning and `next/nlrc_vksplat/docs/testing-report.md` reflects new coverage or remaining gaps.
 
 ## Deferred Non-Kernel Scope
 

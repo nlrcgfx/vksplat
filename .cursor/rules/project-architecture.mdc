@@ -57,3 +57,4 @@ Ref lineage is `VulkanGSPipeline -> VulkanGSRenderer -> VulkanGSTrainer`; treat 
 - `README.md`: repo overview and build entrypoints.
 - `ref/docs/shader-pipeline.md`: GPU stages, buffer I/O, and subgraphs A-G.
 - `ref/docs/ohos-maleoon910-porting-report.md`: OpenHarmony / Maleoon 910 constraints.
+- `next/nlrc_vksplat/docs/testing-report.md`: current test coverage, known gaps, and hardening backlog.
