@@ -1,12 +1,12 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <vector>
 
 #include <vulkan/vulkan.h>
 
 #include "gpu/headless_context.hpp"
+#include "span.hpp"
 
 namespace nlrc::vksplat::gpu {
 
@@ -29,19 +29,29 @@ public:
     return size_bytes_;
   }
 
-  void upload(const void *data, std::size_t size_bytes);
+  void upload(ByteView data);
 
-  void read_back(void *data, std::size_t size_bytes) const;
+  void read_back(MutableByteView data) const;
+
+  template <typename T>
+  void upload(Span<const T> data) {
+    upload(ByteView(data));
+  }
+
+  template <typename T>
+  void read_back(Span<T> data) const {
+    read_back(MutableByteView(data));
+  }
 
   template <typename T>
   void upload(const std::vector<T> &data) {
-    upload(data.data(), data.size() * sizeof(T));
+    upload(make_span(data));
   }
 
   template <typename T>
   [[nodiscard]] std::vector<T> read_back(std::size_t count) const {
     std::vector<T> out(count);
-    read_back(out.data(), count * sizeof(T));
+    read_back(make_span(out));
     return out;
   }
 

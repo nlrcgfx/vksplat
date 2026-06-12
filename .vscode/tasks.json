@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "nlrc: lint C++",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/next/nlrc_vksplat/scripts/build-windows.ps1",
+        "-Preset",
+        "windows-debug",
+        "-Target",
+        "nlrc_vksplat_lint"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/next/nlrc_vksplat"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "nlrc: build tests",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/next/nlrc_vksplat/scripts/build-windows.ps1",
+        "-Preset",
+        "windows-debug",
+        "-Target",
+        "nlrc_vksplat_tests"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/next/nlrc_vksplat"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "nlrc: test",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/next/nlrc_vksplat/scripts/build-windows.ps1",
+        "-Preset",
+        "windows-debug",
+        "-Target",
+        "nlrc_vksplat_tests",
+        "-RunTests"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/next/nlrc_vksplat"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

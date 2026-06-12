@@ -1,6 +1,6 @@
 ---
 description: C++17 and mobile-first Vulkan standards for the rewrite
-globs: next/**/*.{hpp,cpp}
+globs: next/**/*.{hpp,cpp,slang,comp,glsl}
 alwaysApply: false
 ---
 
@@ -37,6 +37,6 @@ Mobile GPUs are sensitive to alignment. Host/device structs, push constants (max
 
 ## Abstractions
 
-Reuse rewrite abstractions once introduced (`VulkanGSPipeline`, `_VulkanBuffer`, `Buffer<T>`, `_ComputePipeline`). Do not copy ref `PACK_STRUCT` packing.
+Reuse current rewrite abstractions (`HeadlessContext`, `StorageBuffer`, `ComputePipeline`) until a higher-level pipeline wrapper is introduced. Do not copy ref `PACK_STRUCT` packing.
 
 Error handling: `rewrite-error-handling.mdc` — use `check_vk`, not `_THROW_ERROR`.

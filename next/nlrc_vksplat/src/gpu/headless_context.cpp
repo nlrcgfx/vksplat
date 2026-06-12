@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "gpu/constants.hpp"
 #include "vulkan_check.hpp"
 
 namespace nlrc::vksplat::gpu {
@@ -31,13 +32,13 @@ namespace {
 
   switch (props.deviceType) {
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-      return 3;
+      return kDiscreteGpuScore;
     case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-      return 2;
+      return kIntegratedGpuScore;
     case VK_PHYSICAL_DEVICE_TYPE_CPU:
-      return 1;
+      return kCpuDeviceScore;
     default:
-      return 0;
+      return kUnsupportedDeviceScore;
   }
 }
 
@@ -53,7 +54,7 @@ namespace {
   check_vk(vkEnumeratePhysicalDevices(instance, &count, devices.data()), "vkEnumeratePhysicalDevices(list)");
 
   VkPhysicalDevice best = {};
-  int best_score = -1;
+  int best_score = kNoDeviceScore;
   uint32_t family = 0;
 
   for (VkPhysicalDevice device : devices) {
@@ -80,8 +81,8 @@ namespace {
 bool probe_compute_device() {
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.pApplicationName = "nlrc_vksplat_probe";
-  app_info.apiVersion = VK_API_VERSION_1_2;
+  app_info.pApplicationName = kProbeApplicationName;
+  app_info.apiVersion = kVulkanApiVersion;
 
   VkInstanceCreateInfo create_info{};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -108,8 +109,8 @@ bool probe_compute_device() {
 HeadlessContext::HeadlessContext() {
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.pApplicationName = "nlrc_vksplat";
-  app_info.apiVersion = VK_API_VERSION_1_2;
+  app_info.pApplicationName = kApplicationName;
+  app_info.apiVersion = kVulkanApiVersion;
 
   VkInstanceCreateInfo instance_info{};
   instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -121,20 +122,20 @@ HeadlessContext::HeadlessContext() {
     throw std::runtime_error("Selected device has no compute queue");
   }
 
-  const float queue_priority = 1.0F;
+  const float queue_priority = kQueuePriority;
   VkDeviceQueueCreateInfo queue_info{};
   queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
   queue_info.queueFamilyIndex = compute_queue_family_;
-  queue_info.queueCount = 1;
+  queue_info.queueCount = kQueueCount;
   queue_info.pQueuePriorities = &queue_priority;
 
   VkDeviceCreateInfo device_info{};
   device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  device_info.queueCreateInfoCount = 1;
+  device_info.queueCreateInfoCount = kQueueCount;
   device_info.pQueueCreateInfos = &queue_info;
 
   check_vk(vkCreateDevice(physical_device_, &device_info, nullptr, &device_), "vkCreateDevice");
-  vkGetDeviceQueue(device_, compute_queue_family_, 0, &compute_queue_);
+  vkGetDeviceQueue(device_, compute_queue_family_, kQueueIndex, &compute_queue_);
 
   VkCommandPoolCreateInfo pool_info{};
   pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -170,14 +171,14 @@ void HeadlessContext::wait_idle() const {
 }
 
 void HeadlessContext::submit_and_wait(VkCommandBuffer command_buffer) const {
-  check_vk(vkResetFences(device_, 1, &fence_), "vkResetFences");
+  check_vk(vkResetFences(device_, kSingleSubmitCount, &fence_), "vkResetFences");
 
   VkSubmitInfo submit_info{};
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit_info.commandBufferCount = 1;
+  submit_info.commandBufferCount = kSingleCommandBufferCount;
   submit_info.pCommandBuffers = &command_buffer;
-  check_vk(vkQueueSubmit(compute_queue_, 1, &submit_info, fence_), "vkQueueSubmit");
-  check_vk(vkWaitForFences(device_, 1, &fence_, VK_TRUE, UINT64_MAX), "vkWaitForFences");
+  check_vk(vkQueueSubmit(compute_queue_, kSingleSubmitCount, &submit_info, fence_), "vkQueueSubmit");
+  check_vk(vkWaitForFences(device_, kSingleSubmitCount, &fence_, VK_TRUE, kFenceWaitTimeout), "vkWaitForFences");
 }
 
 } // namespace nlrc::vksplat::gpu

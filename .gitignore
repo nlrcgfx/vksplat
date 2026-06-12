@@ -18,6 +18,7 @@ dist/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/tasks.json
 .vs/
 .idea/
 *.user

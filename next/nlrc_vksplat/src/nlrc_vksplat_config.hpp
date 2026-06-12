@@ -92,26 +92,44 @@ struct TensorBwdConfig final {
   uint32_t min_shared_mem;
 };
 
+inline constexpr uint32_t kSubgroupSize = VKSPLAT_SUBGROUP_SIZE;
+inline constexpr uint32_t kTileHeight = VKSPLAT_TILE_HEIGHT;
+inline constexpr uint32_t kTileWidth = VKSPLAT_TILE_WIDTH;
+inline constexpr uint32_t kTileSize = VKSPLAT_TILE_SIZE;
+inline constexpr uint32_t kMaxPushConstantBytes = 192;
+inline constexpr bool kUseEmulatedInt64 = VKSPLAT_USE_EMULATED_INT64 != 0;
+inline constexpr bool kUseEmulatedF32Atomic = VKSPLAT_USE_EMULATED_F32_ATOMIC != 0;
+inline constexpr uint32_t kRectTileSpaceWords = VKSPLAT_RECT_TILE_SPACE_WORDS;
+inline constexpr uint32_t kSortingKeyBits = VKSPLAT_SORTING_KEY_BITS;
+
+inline constexpr uint32_t kTensorBwdAlphaWords = 1;
+inline constexpr uint32_t kTensorBwdScreenPositionWords = 2;
+inline constexpr uint32_t kTensorBwdCovarianceWords = 4;
+inline constexpr uint32_t kTensorBwdColorWords = 3;
+inline constexpr uint32_t kTensorBwdPerSplatScreenWords = 2;
+inline constexpr uint32_t kTensorBwdNoSubgroupGradientWords = 6;
+inline constexpr uint32_t kTensorBwdNoSubgroupColorWords = 3;
+inline constexpr uint32_t kTensorBwdGroupReduceGradientWords = 6;
+inline constexpr uint32_t kTensorBwdSubgroupColorReduceWords = 3;
+
 [[nodiscard]] constexpr uint32_t
 tensor_bwd_shared_memory(bool use_subgroup_operations, int splat_batch_size, int group_reduce_before_atomic) {
-  constexpr uint32_t kTileSize = VKSPLAT_TILE_SIZE;
-
   uint32_t words = 0;
-  words += kTileSize * 1;
-  words += kTileSize * 2;
-  words += kTileSize * 4;
-  words += kTileSize * 3;
-  words += kTileSize * splat_batch_size * 2;
+  words += kTileSize * kTensorBwdAlphaWords;
+  words += kTileSize * kTensorBwdScreenPositionWords;
+  words += kTileSize * kTensorBwdCovarianceWords;
+  words += kTileSize * kTensorBwdColorWords;
+  words += kTileSize * splat_batch_size * kTensorBwdPerSplatScreenWords;
 
   if (!use_subgroup_operations) {
-    words += kTileSize * 6;
-    words += kTileSize * 3;
+    words += kTileSize * kTensorBwdNoSubgroupGradientWords;
+    words += kTileSize * kTensorBwdNoSubgroupColorWords;
   }
 
   if (group_reduce_before_atomic > 0) {
-    words += kTileSize * 6;
+    words += kTileSize * kTensorBwdGroupReduceGradientWords;
     if (use_subgroup_operations) {
-      words += kTileSize * 3;
+      words += kTileSize * kTensorBwdSubgroupColorReduceWords;
     }
   }
 

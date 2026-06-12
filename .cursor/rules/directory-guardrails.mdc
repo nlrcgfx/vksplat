@@ -25,4 +25,4 @@ alwaysApply: true
 
 ## Build artifacts
 
-Do not stage: `ref/vksplat/build/`, `.slangtorch_cache`, `__pycache__/`. See `git-commits` rule for commit workflow.
+Do not stage: `ref/vksplat/build/`, `next/nlrc_vksplat/build/`, generated shader outputs, `.slangtorch_cache`, `__pycache__/`, or `CMakeUserPresets.json`. See `git-commits` rule for commit workflow.

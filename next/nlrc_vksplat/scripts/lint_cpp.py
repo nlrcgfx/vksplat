@@ -60,14 +60,14 @@ def run_clang_format(paths: list[Path], style_file: Path, fix: bool) -> None:
     )
 
 
-def run_clang_tidy(sources: list[Path], project_dir: Path) -> None:
+def run_clang_tidy(sources: list[Path], project_dir: Path, build_dir: Path) -> None:
     if not sources:
         return
 
-    compile_commands = project_dir / "build" / "compile_commands.json"
+    compile_commands = build_dir / "compile_commands.json"
     if not compile_commands.exists():
         raise RuntimeError(
-            "build/compile_commands.json not found. "
+            f"{compile_commands} not found. "
             "Run `cmake --preset <preset>` before nlrc_vksplat_lint"
         )
 
@@ -86,7 +86,7 @@ def run_clang_tidy(sources: list[Path], project_dir: Path) -> None:
         cmd = [
             clang_tidy,
             str(source),
-            f"-p={project_dir / 'build'}",
+            f"-p={build_dir}",
             f"--config-file={config_file}",
             "-warnings-as-errors=*",
         ]
@@ -109,9 +109,16 @@ def main() -> int:
         action="store_true",
         help="Apply clang-format fixes before checking",
     )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=None,
+        help="CMake binary directory containing compile_commands.json",
+    )
     args = parser.parse_args()
 
     project_dir = args.project_dir.resolve()
+    build_dir = args.build_dir.resolve() if args.build_dir is not None else (project_dir / "build")
     style_file = project_dir / ".clang-format"
     if not style_file.exists():
         print(f"clang-format config not found: {style_file}", file=sys.stderr)
@@ -125,7 +132,7 @@ def main() -> int:
 
     try:
         run_clang_format(all_paths, style_file, args.fix)
-        run_clang_tidy(sources, project_dir)
+        run_clang_tidy(sources, project_dir, build_dir)
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

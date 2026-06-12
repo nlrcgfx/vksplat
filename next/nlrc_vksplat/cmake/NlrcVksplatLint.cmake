@@ -12,6 +12,7 @@ function(nlrc_vksplat_add_lint_targets core_target)
         ${Python_EXECUTABLE}
         ${NLRC_VKSPLAT_LINT_SCRIPT}
         --project-dir ${CMAKE_CURRENT_SOURCE_DIR}
+        --build-dir ${CMAKE_BINARY_DIR}
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       COMMENT "Linting rewrite C++ sources (clang-format + clang-tidy)"
       VERBATIM
@@ -22,17 +23,17 @@ function(nlrc_vksplat_add_lint_targets core_target)
     add_dependencies(nlrc_vksplat_lint nlrc_vksplat_shaders)
   endif()
 
-  if(TARGET nlrc_vksplat_sync_compile_commands)
-    add_dependencies(nlrc_vksplat_lint nlrc_vksplat_sync_compile_commands)
-  endif()
-
-  if(TARGET nlrc_vksplat_tests)
-    add_dependencies(nlrc_vksplat_lint nlrc_vksplat_tests)
-  endif()
-
   if(TARGET ${core_target})
     add_dependencies(${core_target} nlrc_vksplat_lint)
   else()
     message(FATAL_ERROR "nlrc_vksplat_add_lint_targets: target ${core_target} does not exist")
+  endif()
+
+  if(TARGET nlrc_vksplat_gpu)
+    add_dependencies(nlrc_vksplat_gpu nlrc_vksplat_lint)
+  endif()
+
+  if(TARGET nlrc_vksplat_tests)
+    add_dependencies(nlrc_vksplat_tests nlrc_vksplat_lint)
   endif()
 endfunction()

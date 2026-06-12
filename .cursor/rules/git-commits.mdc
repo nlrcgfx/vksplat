@@ -87,6 +87,9 @@ On Windows/PowerShell, use `-m "subject" -m "body"` if HEREDOC is unavailable.
 ## Do not stage (unless user explicitly asks)
 
 - Build outputs: `ref/vksplat/build/`
+- Build outputs: `next/nlrc_vksplat/build/`
+- Generated shader outputs: `ref/vksplat/shader/generated/`, `next/nlrc_vksplat/build/*/generated/`
 - Caches: `.slangtorch_cache`, `__pycache__/`
+- Local presets: `CMakeUserPresets.json`
 
 If `git status` shows build artifacts, stage only source changes and mention that build dirs were skipped.

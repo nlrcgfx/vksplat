@@ -38,6 +38,7 @@ add_custom_command(
     ${Python_EXECUTABLE}
     ${NLRC_VKSPLAT_SHADER_SCRIPT}
     --project-dir ${CMAKE_CURRENT_SOURCE_DIR}
+    --build-dir ${CMAKE_BINARY_DIR}
     --generated-dir ${NLRC_VKSPLAT_SHADER_GENERATED_DIR}
     --emulate-int64 ${NLRC_VKSPLAT_USE_EMULATED_INT64_VALUE}
     --emulate-f32-atomic ${NLRC_VKSPLAT_USE_EMULATED_F32_ATOMIC_VALUE}

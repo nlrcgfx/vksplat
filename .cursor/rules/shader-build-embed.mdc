@@ -1,6 +1,6 @@
 ---
 description: CMake-time shader compile and embedded SPIR-V headers (gap #4)
-globs: next/**/*.{slang,comp,glsl,cmake,txt,hpp}
+globs: next/**/*.{slang,comp,glsl,cmake,txt,hpp,py,json,ps1}
 alwaysApply: false
 ---
 

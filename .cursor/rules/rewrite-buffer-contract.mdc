@@ -1,6 +1,6 @@
 ---
 description: Buffer names, descriptor binding order, and std430 layout parity with ref
-globs: next/**/*.{hpp,cpp},next/**/tests/**,test_data/**
+globs: next/**/*.{hpp,cpp,slang,comp,glsl},next/**/tests/**,test_data/**
 alwaysApply: false
 ---
 

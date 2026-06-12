@@ -1,6 +1,7 @@
 include_guard(GLOBAL)
 
 include(FetchContent)
+include("${CMAKE_CURRENT_LIST_DIR}/NlrcVksplatFetchDependency.cmake")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
   set(_NLRC_VKSPLAT_DEFAULT_BUILD_TESTS OFF)
@@ -14,6 +15,8 @@ set_property(CACHE NLRC_VKSPLAT_GPU_TESTS PROPERTY STRINGS AUTO REQUIRE OFF)
 
 set(NLRC_VKSPLAT_TEST_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../test_data" CACHE PATH
     "Root directory for fixture and golden test data")
+set(NLRC_VKSPLAT_DEP_ARCHIVE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/contrib" CACHE PATH
+    "Directory containing optional local dependency archives")
 
 set(_NLRC_VKSPLAT_GPU_POLICY_VALUE 0)
 if(NLRC_VKSPLAT_GPU_TESTS STREQUAL "REQUIRE")
@@ -50,21 +53,40 @@ function(nlrc_vksplat_setup_tests)
     return()
   endif()
 
-  FetchContent_Declare(
-    Catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.7.1
-    GIT_SHALLOW TRUE
+  set(NLRC_VKSPLAT_CATCH2_VERSION 3.7.1)
+  set(NLRC_VKSPLAT_CATCH2_ARCHIVE
+      "${NLRC_VKSPLAT_DEP_ARCHIVE_DIR}/Catch2-v${NLRC_VKSPLAT_CATCH2_VERSION}.tar.gz"
   )
-  FetchContent_MakeAvailable(Catch2)
+  set(NLRC_VKSPLAT_CATCH2_REMOTE_URL
+      "https://github.com/catchorg/Catch2/archive/refs/tags/v${NLRC_VKSPLAT_CATCH2_VERSION}.tar.gz"
+  )
+  set(NLRC_VKSPLAT_CATCH2_SHA256 "SHA256=c991b247a1a0d7bb9c39aa35faf0fe9e19764213f28ffba3109388e62ee0269c")
 
-  FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-    GIT_SHALLOW TRUE
+  nlrc_vksplat_fetch_dependency(
+    NAME Catch2
+    URL "${NLRC_VKSPLAT_CATCH2_REMOTE_URL}"
+    LOCAL_ARCHIVE "${NLRC_VKSPLAT_CATCH2_ARCHIVE}"
+    URL_HASH "${NLRC_VKSPLAT_CATCH2_SHA256}"
   )
-  FetchContent_MakeAvailable(nlohmann_json)
+
+  set(JSON_BuildTests OFF CACHE INTERNAL "")
+  set(NLRC_VKSPLAT_NLOHMANN_JSON_VERSION 3.11.3)
+  set(NLRC_VKSPLAT_NLOHMANN_JSON_ARCHIVE
+      "${NLRC_VKSPLAT_DEP_ARCHIVE_DIR}/json-v${NLRC_VKSPLAT_NLOHMANN_JSON_VERSION}.tar.gz"
+  )
+  set(NLRC_VKSPLAT_NLOHMANN_JSON_REMOTE_URL
+      "https://github.com/nlohmann/json/archive/refs/tags/v${NLRC_VKSPLAT_NLOHMANN_JSON_VERSION}.tar.gz"
+  )
+  set(NLRC_VKSPLAT_NLOHMANN_JSON_SHA256
+      "SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406"
+  )
+
+  nlrc_vksplat_fetch_dependency(
+    NAME nlohmann_json
+    URL "${NLRC_VKSPLAT_NLOHMANN_JSON_REMOTE_URL}"
+    LOCAL_ARCHIVE "${NLRC_VKSPLAT_NLOHMANN_JSON_ARCHIVE}"
+    URL_HASH "${NLRC_VKSPLAT_NLOHMANN_JSON_SHA256}"
+  )
 
   list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 

@@ -95,25 +95,35 @@ void StorageBuffer::destroy() noexcept {
   size_bytes_ = 0;
 }
 
-void StorageBuffer::upload(const void *data, std::size_t size_bytes) {
-  if (size_bytes > size_bytes_) {
+void StorageBuffer::upload(ByteView data) {
+  if (data.size_bytes() > size_bytes_) {
     throw std::invalid_argument("StorageBuffer upload exceeds allocation");
+  }
+  if (data.data() == nullptr && !data.empty()) {
+    throw std::invalid_argument("StorageBuffer upload data is null");
   }
 
   void *mapped = nullptr;
   check_vk(vkMapMemory(device_, memory_, 0, size_bytes_, 0, &mapped), "vkMapMemory");
-  std::memcpy(mapped, data, size_bytes);
+  if (!data.empty()) {
+    std::memcpy(mapped, data.data(), data.size_bytes());
+  }
   vkUnmapMemory(device_, memory_);
 }
 
-void StorageBuffer::read_back(void *data, std::size_t size_bytes) const {
-  if (size_bytes > size_bytes_) {
+void StorageBuffer::read_back(MutableByteView data) const {
+  if (data.size_bytes() > size_bytes_) {
     throw std::invalid_argument("StorageBuffer read_back exceeds allocation");
+  }
+  if (data.data() == nullptr && !data.empty()) {
+    throw std::invalid_argument("StorageBuffer read_back data is null");
   }
 
   void *mapped = nullptr;
   check_vk(vkMapMemory(device_, memory_, 0, size_bytes_, 0, &mapped), "vkMapMemory");
-  std::memcpy(data, mapped, size_bytes);
+  if (!data.empty()) {
+    std::memcpy(data.data(), mapped, data.size_bytes());
+  }
   vkUnmapMemory(device_, memory_);
 }
 

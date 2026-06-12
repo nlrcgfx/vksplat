@@ -18,6 +18,13 @@ Reference baseline tag: **`ref-baseline-2026-06-12`**
 
 Requires **Python 3**, **Vulkan SDK** (`slangc` and `glslc` on `PATH`), and a Ninja-capable C++ toolchain. Shaders compile at build time into embedded SPIR-V headers under `build/<preset>/generated/`.
 
+On Windows with MSVC, run CMake from a Visual Studio Developer PowerShell / x64 Native Tools prompt, or use the wrapper below. Plain PowerShell usually lacks the MSVC `INCLUDE`, `LIB`, and `LIBPATH` environment.
+
+```powershell
+cd next/nlrc_vksplat
+powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -Preset windows-debug -RunTests
+```
+
 ```bash
 cd next/nlrc_vksplat
 cmake --preset windows-debug
@@ -27,7 +34,7 @@ ctest --preset windows-debug
 
 CMake profile options (subset of config): `NLRC_VKSPLAT_EMULATE_INT64`, `NLRC_VKSPLAT_EMULATE_F32_ATOMIC`. OHOS presets enable emulated int64 by default. Full numeric constants live in `src/nlrc_vksplat_config.hpp`. See `.cursor/rules/shader-build-embed.mdc`.
 
-**VS Code / Cursor:** open the repo root, install the recommended extensions when prompted, then run **CMake: Configure** (or `cmake --preset windows-debug`) so `build/compile_commands.json` is available for clangd.
+**VS Code / Cursor:** open the repo root, install the recommended extensions when prompted, then run **CMake: Configure** (or `cmake --preset windows-debug`) so `build/compile_commands.json` is available for clangd. Use a Developer PowerShell terminal when building with MSVC.
 
 **C++ lint:** every build runs blocking `clang-format` + `clang-tidy` via the `nlrc_vksplat_lint` target. Shader generation also lint-checks each `*_spirv.hpp`. Run lint alone with `cmake --build --preset windows-debug --target nlrc_vksplat_lint`. Style rules: `.cursor/rules/cpp-coding-style.mdc`.
 
@@ -57,9 +64,9 @@ pip install -e . --no-build-isolation
 
 ## Documentation
 
-- [Reference README](ref/README.md) — full VkSplat install, training, and development guide
-- [Shader pipeline](ref/docs/shader-pipeline.md) — GPU compute stages and buffer layout
-- [OHOS porting report](ref/docs/ohos-maleoon910-porting-report.md) — OpenHarmony / Maleoon notes
+- [Reference README](ref/README.md) - full VkSplat install, training, and development guide
+- [Shader pipeline](ref/docs/shader-pipeline.md) - GPU compute stages and buffer layout
+- [OHOS porting report](ref/docs/ohos-maleoon910-porting-report.md) - OpenHarmony / Maleoon notes
 
 ## Policy
 

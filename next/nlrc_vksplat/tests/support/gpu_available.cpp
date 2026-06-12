@@ -8,11 +8,11 @@ namespace nlrc::vksplat::tests {
 
 GpuTestPolicy gpu_test_policy() {
 #if NLRC_VKSPLAT_GPU_TEST_POLICY == 1
-  return GpuTestPolicy::kRequire;
+  return GpuTestPolicy::Require;
 #elif NLRC_VKSPLAT_GPU_TEST_POLICY == 2
-  return GpuTestPolicy::kOff;
+  return GpuTestPolicy::Off;
 #else
-  return GpuTestPolicy::kAuto;
+  return GpuTestPolicy::Auto;
 #endif
 }
 
@@ -23,11 +23,11 @@ bool gpu_available() {
 
 void require_gpu_for_test() {
   const auto policy = gpu_test_policy();
-  if (policy == GpuTestPolicy::kOff) {
+  if (policy == GpuTestPolicy::Off) {
     SKIP("GPU tests disabled (NLRC_VKSPLAT_GPU_TESTS=OFF)");
   }
   if (!gpu_available()) {
-    if (policy == GpuTestPolicy::kRequire) {
+    if (policy == GpuTestPolicy::Require) {
       FAIL("Vulkan compute device required but not available");
     }
     SKIP("No Vulkan compute device available");

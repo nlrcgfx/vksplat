@@ -1,6 +1,6 @@
 ---
 description: Phased port order for rewrite kernels and subgraphs A–G
-globs: next/**/*.{hpp,cpp},next/**/tests/**,test_data/**
+globs: next/**/*.{hpp,cpp,slang,comp,glsl},next/**/tests/**,test_data/**
 alwaysApply: false
 ---
 

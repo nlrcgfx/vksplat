@@ -21,12 +21,15 @@ from generate_shader_config import generate_shader_config  # noqa: E402
 @dataclass
 class CompileConfig:
     project_dir: Path
+    build_dir: Path
     slang_src_path: Path
     shader_dst_path: Path
     generated_dir: Path
     config_header_path: Path
-    slangc_compile_args: str = "-stage compute -O -fp-mode fast -line-directive-mode none"
-    glslc_compile_args: str = "-O --target-spv=spv1.5 --target-env=vulkan1.2"
+    slangc_compile_args: list[str] = field(
+        default_factory=lambda: ["-stage", "compute", "-O", "-fp-mode", "fast", "-line-directive-mode", "none"]
+    )
+    glslc_compile_args: list[str] = field(default_factory=lambda: ["-O", "--target-spv=spv1.5", "--target-env=vulkan1.2"])
     slangc_path: Path | None = None
     glslc_path: Path | None = None
     emulate_int64: int | None = None
@@ -37,6 +40,14 @@ class CompileConfig:
 class ShaderJob:
     name: str
     defines: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class ShaderSource:
+    source: str
+    language: str
+    jobs: list[ShaderJob] = field(default_factory=list)
+    deps: list[str] = field(default_factory=list)
 
 
 def spirv_symbols(job_name: str) -> tuple[str, str]:
@@ -103,7 +114,7 @@ def clang_format_file(path: Path, style_file: Path) -> None:
     )
 
 
-def verify_header_tidy(header_path: Path, project_dir: Path, generated_dir: Path) -> None:
+def verify_header_tidy(header_path: Path, project_dir: Path, build_dir: Path, generated_dir: Path) -> None:
     clang_tidy = _find_clang_tidy()
     config_file = project_dir / ".clang-tidy"
     if not config_file.exists():
@@ -114,7 +125,7 @@ def verify_header_tidy(header_path: Path, project_dir: Path, generated_dir: Path
     lint_cpp = lint_dir / f"{header_path.stem}_lint.cpp"
     lint_cpp.write_text(f'#include "{header_path.name}"\n', encoding="utf-8")
 
-    compile_commands_dir = project_dir / "build"
+    compile_commands_dir = build_dir
     compile_commands = compile_commands_dir / "compile_commands.json"
     cmd = [
         str(clang_tidy),
@@ -145,12 +156,12 @@ def verify_header_tidy(header_path: Path, project_dir: Path, generated_dir: Path
         raise RuntimeError(message)
 
 
-def verify_generated_cpp_header(header_path: Path, project_dir: Path, generated_dir: Path) -> None:
+def verify_generated_cpp_header(header_path: Path, project_dir: Path, build_dir: Path, generated_dir: Path) -> None:
     style_file = project_dir / ".clang-format"
     if not style_file.exists():
         raise RuntimeError(f"clang-format config not found: {style_file}")
     clang_format_file(header_path, style_file)
-    verify_header_tidy(header_path, project_dir, generated_dir)
+    verify_header_tidy(header_path, project_dir, build_dir, generated_dir)
 
 
 class ShaderCompiler:
@@ -188,10 +199,10 @@ class ShaderCompiler:
             return Path(glslc)
         raise RuntimeError("glslc not found. Install the Vulkan SDK or pass --glslc")
 
-    def _create_shader_jobs(self) -> list[tuple[str, list[ShaderJob], list[str]]]:
+    def _create_shader_jobs(self) -> list[ShaderSource]:
         # Add kernel jobs here as stages are ported (Phase 1+).
         return [
-            ("smoke.slang", [ShaderJob("smoke", {})], []),
+            ShaderSource(source="smoke.slang", language="slang", jobs=[ShaderJob("smoke", {})]),
         ]
 
     def _compile_slang_job(self, source_file: str, job: ShaderJob) -> Path:
@@ -203,7 +214,7 @@ class ShaderCompiler:
         for define, value in job.defines.items():
             cmd.append(f"-D{define}={value}")
         cmd.extend(["-target", "spirv"])
-        cmd.extend(self.config.slangc_compile_args.split())
+        cmd.extend(self.config.slangc_compile_args)
         cmd.extend(["-I", str(self.config.generated_dir)])
         cmd.extend(["-I", str(self.config.slang_src_path)])
         cmd.extend(["-o", str(spirv_path)])
@@ -214,7 +225,12 @@ class ShaderCompiler:
             encoding="utf-8",
         )
         spirv_path.unlink(missing_ok=True)
-        verify_generated_cpp_header(header_path, self.config.project_dir, self.config.generated_dir)
+        verify_generated_cpp_header(
+            header_path,
+            self.config.project_dir,
+            self.config.build_dir,
+            self.config.generated_dir,
+        )
 
         array_symbol, word_count_symbol = spirv_symbols(job.name)
         self.manifest_modules.append(
@@ -230,10 +246,12 @@ class ShaderCompiler:
         return header_path
 
     def compile_all(self) -> None:
-        for source_file, shader_jobs, _deps in self._create_shader_jobs():
-            for job in shader_jobs:
-                print(f">>> Compiling {source_file} ({job.name})")
-                header_path = self._compile_slang_job(source_file, job)
+        for source in self._create_shader_jobs():
+            if source.language != "slang":
+                raise ValueError(f"Unsupported shader language for {source.source}: {source.language}")
+            for job in source.jobs:
+                print(f">>> Compiling {source.source} ({job.name})")
+                header_path = self._compile_slang_job(source.source, job)
                 print(f"[OK] Wrote {header_path.name}")
 
         manifest = {
@@ -261,6 +279,12 @@ def main() -> int:
         default=None,
         help="Output directory for generated headers and config (required from CMake)",
     )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=None,
+        help="CMake binary directory containing compile_commands.json",
+    )
     parser.add_argument("--slangc", type=Path, default=None)
     parser.add_argument("--glslc", type=Path, default=None)
     parser.add_argument("--emulate-int64", type=int, choices=[0, 1], required=True)
@@ -273,9 +297,11 @@ def main() -> int:
         if args.generated_dir is not None
         else (project_dir / "build" / "generated")
     )
+    build_dir = args.build_dir.resolve() if args.build_dir is not None else generated_dir.parent
 
     config = CompileConfig(
         project_dir=project_dir,
+        build_dir=build_dir,
         slang_src_path=project_dir / "slang",
         shader_dst_path=project_dir / "shader",
         generated_dir=generated_dir,
