@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+namespace fs = std::filesystem;
+
 namespace nlrc::vksplat::tests {
 namespace {
 
@@ -71,7 +73,7 @@ std::size_t buffer_dtype_size(BufferDtype dtype) {
   throw std::invalid_argument("Unknown buffer dtype enum value");
 }
 
-FixtureManifest load_fixture_manifest(const std::filesystem::path &manifest_path) {
+FixtureManifest load_fixture_manifest(const fs::path &manifest_path) {
   std::ifstream input(manifest_path);
   if (!input) {
     throw std::runtime_error("Failed to open manifest: " + manifest_path.string());

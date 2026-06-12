@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+namespace fs = std::filesystem;
+
 namespace nlrc::vksplat::tests {
 
 inline constexpr double kDefaultFixtureEpsilon = 1e-5;
@@ -70,6 +72,6 @@ struct BufferDtypeTraits<std::int64_t> {
   static constexpr const char *kName = "int64";
 };
 
-[[nodiscard]] FixtureManifest load_fixture_manifest(const std::filesystem::path &manifest_path);
+[[nodiscard]] FixtureManifest load_fixture_manifest(const fs::path &manifest_path);
 
 } // namespace nlrc::vksplat::tests

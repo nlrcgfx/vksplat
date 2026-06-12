@@ -1,31 +1,32 @@
 #include "fixture_loader.hpp"
 
-#include "fixture_manifest.hpp"
-
 #include <fstream>
 #include <functional>
 #include <map>
 #include <numeric>
 #include <stdexcept>
 
+#include "fixture_manifest.hpp"
+
+namespace fs = std::filesystem;
+
 namespace nlrc::vksplat::tests {
 
 namespace {
 
-[[nodiscard]] const std::map<std::string, std::filesystem::path> &stage_dirs_under(
-    const std::filesystem::path &root) {
-  static std::filesystem::path indexed_root;
-  static std::map<std::string, std::filesystem::path> indexed_dirs;
+[[nodiscard]] const std::map<std::string, fs::path> &stage_dirs_under(const fs::path &root) {
+  static fs::path indexed_root;
+  static std::map<std::string, fs::path> indexed_dirs;
 
   if (indexed_root != root) {
     indexed_root = root;
     indexed_dirs.clear();
 
-    if (!std::filesystem::exists(root)) {
+    if (!fs::exists(root)) {
       return indexed_dirs;
     }
 
-    for (const auto &entry : std::filesystem::recursive_directory_iterator(root)) {
+    for (const auto &entry : fs::recursive_directory_iterator(root)) {
       if (!entry.is_regular_file() || entry.path().filename() != "manifest.json") {
         continue;
       }
@@ -41,8 +42,7 @@ namespace {
   return indexed_dirs;
 }
 
-[[nodiscard]] std::filesystem::path resolve_stage_dir(const std::filesystem::path &root,
-                                                    const std::string &stage_name) {
+[[nodiscard]] fs::path resolve_stage_dir(const fs::path &root, const std::string &stage_name) {
   const auto &dirs = stage_dirs_under(root);
   const auto dir_it = dirs.find(stage_name);
   if (dir_it == dirs.end()) {
@@ -53,19 +53,19 @@ namespace {
 
 } // namespace
 
-[[nodiscard]] std::filesystem::path test_data_root() {
+[[nodiscard]] fs::path test_data_root() {
   return {NLRC_VKSPLAT_TEST_DATA_DIR};
 }
 
-[[nodiscard]] std::filesystem::path fixture_dir(const std::string &stage_name) {
+[[nodiscard]] fs::path fixture_dir(const std::string &stage_name) {
   return resolve_stage_dir(test_data_root() / "fixtures", stage_name);
 }
 
-[[nodiscard]] std::filesystem::path golden_dir(const std::string &stage_name) {
+[[nodiscard]] fs::path golden_dir(const std::string &stage_name) {
   return resolve_stage_dir(test_data_root() / "golden_masters", stage_name);
 }
 
-[[nodiscard]] std::vector<std::uint8_t> load_binary_file(const std::filesystem::path &path) {
+[[nodiscard]] std::vector<std::uint8_t> load_binary_file(const fs::path &path) {
   std::ifstream input(path, std::ios::binary);
   if (!input) {
     throw std::runtime_error("Failed to open binary file: " + path.string());

@@ -64,4 +64,16 @@ private:
   std::size_t size_bytes_{};
 };
 
+template <typename T>
+[[nodiscard]] StorageBuffer make_storage_buffer(const HeadlessContext &context, Span<const T> values) {
+  StorageBuffer buffer(context, values.size_bytes());
+  buffer.upload(values);
+  return buffer;
+}
+
+template <typename T>
+[[nodiscard]] StorageBuffer make_storage_buffer(const HeadlessContext &context, const std::vector<T> &values) {
+  return make_storage_buffer(context, make_span(values));
+}
+
 } // namespace nlrc::vksplat::gpu

@@ -11,6 +11,8 @@
 
 #include <nlohmann/json.hpp>
 
+using namespace nlrc::vksplat;
+
 namespace {
 
 struct ExpectedInt final {
@@ -37,21 +39,20 @@ struct ExpectedUint32 final {
   const std::array expected_ints = {
       ExpectedInt{"use_emulated_int64", config.at("use_emulated_int64").get<int>(), VKSPLAT_USE_EMULATED_INT64},
       ExpectedInt{"use_emulated_int64 constexpr", config.at("use_emulated_int64").get<int>(),
-                  static_cast<int>(nlrc::vksplat::kUseEmulatedInt64)},
+                  static_cast<int>(kUseEmulatedInt64)},
       ExpectedInt{"use_emulated_f32_atomic", config.at("use_emulated_f32_atomic").get<int>(),
                   VKSPLAT_USE_EMULATED_F32_ATOMIC},
       ExpectedInt{"use_emulated_f32_atomic constexpr", config.at("use_emulated_f32_atomic").get<int>(),
-                  static_cast<int>(nlrc::vksplat::kUseEmulatedF32Atomic)},
+                  static_cast<int>(kUseEmulatedF32Atomic)},
       ExpectedInt{"shader_requires_int64", config.at("shader_requires_int64").get<int>(),
-                  static_cast<int>(nlrc::vksplat::kShaderRequiresInt64)},
+                  static_cast<int>(kShaderRequiresInt64)},
   };
   const std::array expected_uint32s = {
       ExpectedUint32{"rect_tile_space_words", config.at("rect_tile_space_words").get<std::uint32_t>(),
-                     nlrc::vksplat::kRectTileSpaceWords},
-      ExpectedUint32{"tile_size", config.at("tile_size").get<std::uint32_t>(), nlrc::vksplat::kTileSize},
-      ExpectedUint32{"subgroup_size", config.at("subgroup_size").get<std::uint32_t>(), nlrc::vksplat::kSubgroupSize},
-      ExpectedUint32{"sorting_key_bits", config.at("sorting_key_bits").get<std::uint32_t>(),
-                     nlrc::vksplat::kSortingKeyBits},
+                     kRectTileSpaceWords},
+      ExpectedUint32{"tile_size", config.at("tile_size").get<std::uint32_t>(), kTileSize},
+      ExpectedUint32{"subgroup_size", config.at("subgroup_size").get<std::uint32_t>(), kSubgroupSize},
+      ExpectedUint32{"sorting_key_bits", config.at("sorting_key_bits").get<std::uint32_t>(), kSortingKeyBits},
   };
 
   std::vector<std::string> mismatches;

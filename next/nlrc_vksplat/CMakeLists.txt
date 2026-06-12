@@ -29,6 +29,7 @@ target_sources(nlrc_vksplat_core
   PRIVATE
     src/gpu/compute_pipeline.cpp
     src/gpu/headless_context.cpp
+    src/gpu/shader_execution.cpp
     src/gpu/storage_buffer.cpp
     src/vulkan_check.hpp
   PUBLIC
@@ -38,6 +39,7 @@ target_sources(nlrc_vksplat_core
       src/gpu/constants.hpp
       src/gpu/compute_pipeline.hpp
       src/gpu/headless_context.hpp
+      src/gpu/shader_execution.hpp
       src/gpu/storage_buffer.hpp
       src/nlrc_vksplat_config.hpp
       src/span.hpp
@@ -52,6 +54,11 @@ target_link_libraries(nlrc_vksplat_core PRIVATE
 
 # Apply shader profile to the core library
 nlrc_vksplat_apply_shader_profile(nlrc_vksplat_core)
+
+if(TARGET nlrc_vksplat_shaders)
+  add_dependencies(nlrc_vksplat_core nlrc_vksplat_shaders)
+  target_include_directories(nlrc_vksplat_core PRIVATE ${NLRC_VKSPLAT_SHADER_GENERATED_DIR})
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
   set(_NLRC_VKSPLAT_DEFAULT_BUILD_TESTING OFF)

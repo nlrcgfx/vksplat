@@ -1,7 +1,5 @@
 #include "manifest_profile.hpp"
 
-#include "nlrc_vksplat_config.hpp"
-
 namespace nlrc::vksplat::tests {
 
 bool manifest_matches_build_profile(const FixtureManifest &manifest) {

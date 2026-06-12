@@ -10,6 +10,8 @@
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
 
+using namespace nlrc::vksplat;
+
 namespace {
 
 [[nodiscard]] std::vector<std::filesystem::path> manifest_paths_under(const std::filesystem::path &root) {
@@ -33,7 +35,7 @@ namespace {
 void validate_manifest_file(const std::filesystem::path &manifest_path) {
   INFO("manifest: " << manifest_path.string());
 
-  const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(manifest_path);
+  const auto manifest = tests::load_fixture_manifest(manifest_path);
   REQUIRE_FALSE(manifest.ref_baseline_tag.empty());
   REQUIRE_FALSE(manifest.stage_name.empty());
   REQUIRE_FALSE(manifest.subgraph.empty());
@@ -60,19 +62,18 @@ void validate_manifest_file(const std::filesystem::path &manifest_path) {
     REQUIRE(std::filesystem::exists(buffer_path));
     REQUIRE(std::filesystem::is_regular_file(buffer_path));
 
-    const auto expected_bytes =
-        nlrc::vksplat::tests::buffer_element_count(spec) * nlrc::vksplat::tests::buffer_dtype_size(spec.dtype);
+    const auto expected_bytes = tests::buffer_element_count(spec) * tests::buffer_dtype_size(spec.dtype);
     REQUIRE(std::filesystem::file_size(buffer_path) == expected_bytes);
   }
 }
 
 } // namespace
 
-[[nodiscard]] std::map<std::string, std::filesystem::path> stage_relative_paths_under(
-    const std::filesystem::path &root) {
+[[nodiscard]] std::map<std::string, std::filesystem::path>
+stage_relative_paths_under(const std::filesystem::path &root) {
   std::map<std::string, std::filesystem::path> paths_by_stage;
   for (const auto &manifest_path : manifest_paths_under(root)) {
-    const auto manifest = nlrc::vksplat::tests::load_fixture_manifest(manifest_path);
+    const auto manifest = tests::load_fixture_manifest(manifest_path);
     const auto relative_path = std::filesystem::relative(manifest_path.parent_path(), root);
     const auto [it, inserted] = paths_by_stage.emplace(manifest.stage_name, relative_path);
     REQUIRE(inserted);
@@ -81,8 +82,8 @@ void validate_manifest_file(const std::filesystem::path &manifest_path) {
 }
 
 TEST_CASE("All committed fixture and golden manifests are valid", "[host]") {
-  const auto fixtures_root = nlrc::vksplat::tests::test_data_root() / "fixtures";
-  const auto goldens_root = nlrc::vksplat::tests::test_data_root() / "golden_masters";
+  const auto fixtures_root = tests::test_data_root() / "fixtures";
+  const auto goldens_root = tests::test_data_root() / "golden_masters";
   const std::array roots = {fixtures_root, goldens_root};
 
   std::size_t checked_manifests = 0;
