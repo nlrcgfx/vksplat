@@ -17,10 +17,14 @@ Monorepo for VkSplat-based 3D Gaussian Splatting training research.
 | `test_data/` | Shared regression assets and golden masters (Phase 2) |
 | `outputs/` | Training runs and buffer dumps (gitignored) |
 
+## Testing
+
+Rewrite verification: Catch2 + CTest harness (`nlrc_vksplat_tests`), fixture-first isolated GPU tests with invariant + ref-parity oracles. See `rewrite-testing.mdc`. Buffer/binding parity: `rewrite-buffer-contract.mdc`. Port sequence: `rewrite-porting-order.mdc`. Error policy: `rewrite-error-handling.mdc`.
+
 ## Targets
 
-- **Windows x86_64** — MSVC or Clang via Ninja (`debug` / `release` presets in `ref/vksplat/CMakePresets.json`)
-- **OpenHarmony ARM64** — OHOS NDK via Clang (`ohos-debug` / `ohos-release` presets)
+- **Windows x86_64** — MSVC or Clang via Ninja (`windows-debug` / `windows-release` in `next/nlrc_vksplat/CMakePresets.json`)
+- **OpenHarmony ARM64** — OHOS NDK via Clang (`ohos-debug` / `ohos-release` in `next/nlrc_vksplat/CMakePresets.json`)
 
 ## Compute stack
 
@@ -34,7 +38,9 @@ Monorepo for VkSplat-based 3D Gaussian Splatting training research.
 
 ## Config propagation
 
-`vksplat_config.h` is the single source of truth for `VKSPLAT_*` constants. A generator emits `config_generated.slang`, `config_generated.glsl`, and `shader_config.json`. Host and shader profiles must stay in sync.
+**Rewrite:** `nlrc_vksplat_config.hpp` is SSOT; CMake profile options + `scripts/compile_shaders.py` emit embedded SPIR-V headers under `${CMAKE_BINARY_DIR}/generated/`. See `shader-build-embed.mdc`.
+
+**Ref:** `vksplat_config.h` + runtime `.spv` load; see `ref/docs/shader-pipeline.md`.
 
 ## Authoritative docs
 

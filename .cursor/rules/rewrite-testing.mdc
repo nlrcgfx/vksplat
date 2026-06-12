@@ -1,0 +1,118 @@
+---
+description: Fixture-first stage testing — invariants, ref parity goldens, test_data layout
+globs: next/**/tests/**,test_data/**
+alwaysApply: false
+---
+
+# Rewrite Testing Strategy
+
+Applies to `next/nlrc_vksplat/` and `test_data/`. Data-driven GPU validation — no mocking.
+
+## Philosophy
+
+- **Not TDD** — do not require tests before any Vulkan harness or pipeline code exists.
+- **Fixture-first, stage-isolated** — each compute dispatch in `ref/docs/shader-pipeline.md` (subgraphs A–G) is ported and verified in isolation before wiring the next subgraph.
+- **Goldens are not ground truth** — they encode ref behavior (including quirks). Invariants catch absurd or ref-internal bugs.
+
+## Three oracles
+
+| Oracle | Purpose | Required? |
+|--------|---------|-----------|
+| **Invariant** | Mathematical/logical properties without ref output | When cheap (sort, cumsum, sanity) |
+| **Ref parity golden** | Match frozen baseline `ref-baseline-2026-06-12` | Every ported dispatch |
+| **E2E smoke** | Tiny scene, loss/PSNR trend | Later; not per-stage |
+
+## CMake and CTest
+
+| Target / command | Role |
+|------------------|------|
+| `nlrc_vksplat_tests` | Catch2 executable (`NLRC_VKSPLAT_BUILD_TESTS`) |
+| `nlrc_vksplat_gpu` | Minimal headless Vulkan substrate for tests and future pipeline code |
+| `ctest --preset windows-debug` | Run discovered tests (`testPresets` in `CMakePresets.json`) |
+
+Options:
+
+- `NLRC_VKSPLAT_BUILD_TESTS` — default **ON** on Windows; **OFF** on `ohos-*` cross-builds
+- `NLRC_VKSPLAT_GPU_TESTS` — `AUTO` (default), `REQUIRE`, or `OFF`
+- `NLRC_VKSPLAT_TEST_DATA_DIR` — compile definition pointing at repo-root `test_data/`
+
+## Catch2 tags and GPU policy
+
+| Tag | Behavior |
+|-----|----------|
+| `[host]` | Always runs (fixture I/O, compare helpers, manifest profile) |
+| `[gpu]` | Needs Vulkan compute device |
+
+**AUTO** (`NLRC_VKSPLAT_GPU_TESTS=AUTO`): `[gpu]` tests call `SKIP` when `gpu_available()` is false. **REQUIRE** fails the run. **OFF** skips all `[gpu]` tests.
+
+Use `NLRC_REQUIRE_GPU()` at the start of GPU test cases (`tests/support/gpu_available.hpp`).
+
+## Harness API (`tests/support/`)
+
+| API | Purpose |
+|-----|---------|
+| `load_fixture_manifest(path)` | Parse `manifest.json` |
+| `load_fixture_buffer(dir, name)` | Load named `.bin` with shape/dtype checks |
+| `compare_float_buffers(expected, actual, epsilon)` | Golden compare (default `1e-5`) |
+| `assert_no_nan_inf(span<float>)` | Sanity oracle helper |
+| `manifest_matches_build_profile(manifest)` | `emulate_int64` / `emulate_f32_atomic` vs `VKSPLAT_USE_EMULATED_*` |
+
+Per-dispatch workflow (Phase 1+): load fixture → upload `StorageBuffer` → `ComputePipeline::dispatch` → read back → invariant and/or golden compare.
+
+## Porting order
+
+Follow phased sequence in `rewrite-porting-order.mdc`. Name fixture folders `<subgraph>_<stage>` (e.g. `D_cumsum`, `A_projection_forward`).
+
+## Porting workflow (per dispatch)
+
+1. Add a minimal fixture under `test_data/fixtures/<subgraph>_<stage>/` (small N, named intent).
+2. Add invariant Catch2 test(s) where applicable (may fail before implementation).
+3. Add golden parity Catch2 test loading `test_data/golden_masters/...` (may fail before implementation).
+4. Implement the stage in `next/nlrc_vksplat/` until both pass.
+5. Only then integrate into the parent subgraph / training path.
+
+## test_data layout
+
+```
+test_data/
+  fixtures/
+    <subgraph>_<stage>/
+      manifest.json
+      *.bin
+  golden_masters/
+    <subgraph>_<stage>/
+      manifest.json
+      *.bin
+```
+
+- Generate source material from ref with `VKSPLAT_ENABLE_BUFFER_DUMPS=ON`; inspect/compare via `ref/vksplat/scripts/vkbd_tool.py`.
+- Convert curated dumps with `next/nlrc_vksplat/scripts/vkbd_to_bins.py` (wrapper; read-only ref tool).
+- **Do not** commit full training-run dumps — minimal curated sets only.
+- Each `manifest.json` must record: `ref_baseline_tag`, `stage_name`, `subgraph`, `bindings` (ordered `buffer.h` field names for descriptor indices 0..N-1), `buffers`, `shapes`, `dtypes`, `cmake_preset`, `emulate_int64`, `emulate_f32_atomic`, `notes` (goldens also: `vkbd_source`, `epsilon`). Default profile: `windows-debug` with both emulate flags `0`.
+
+## GPU harness (Catch2)
+
+For each isolated dispatch:
+
+1. Load fixture binaries into Vulkan storage buffers (`nlrc::vksplat::gpu::StorageBuffer`)
+2. Dispatch **one** compute pipeline (`nlrc::vksplat::gpu::ComputePipeline`)
+3. Read back output buffer(s)
+4. Assert invariants and/or golden equality (default epsilon `1e-5`; override per buffer in manifest `epsilon` map)
+
+Full ref-parity `VulkanGSPipeline` / `executeCompute` is Phase 0 continuation — not required for gap #5 smoke tests.
+
+## Invariant examples
+
+| Category | Examples |
+|----------|----------|
+| Sort / radix | permutation of keys, stability, empty/single-element, duplicate keys |
+| Prefix sum / cumsum | `out[i] == sum(in[0..i])` for small host-verified inputs |
+| Projection | single splat + known camera → bounded tile count / rect |
+| Sanity | no NaN/Inf; shapes match `VulkanGSPipelineBuffers`; `num_indices == 0` early-exit |
+| OHOS | re-run same fixture on `ohos-debug` after Windows passes |
+
+## Updating goldens
+
+- **Allowed** with explicit commit reason: ref baseline bump, intentional behavior fix, or documented ref bug.
+- **Never** silently widen epsilon or shrink fixtures to make tests pass.
+- If invariant and golden disagree, **investigate** — do not assume ref is correct (see `ref/docs/ohos-maleoon910-porting-report.md`).

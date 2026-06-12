@@ -1,0 +1,77 @@
+---
+description: Phased port order for rewrite kernels and subgraphs A–G
+globs: next/**/*.{hpp,cpp},next/**/tests/**,test_data/**
+alwaysApply: false
+---
+
+# Rewrite Porting Order
+
+Mandatory sequence for kernel and subgraph ports. Complements `rewrite-buffer-contract.mdc` (wiring) and `rewrite-testing.mdc` (verification).
+
+## Phase 0 — Infrastructure
+
+Host + harness only; golden parity optional.
+
+- Catch2 harness + `nlrc_vksplat_gpu` minimal substrate (`rewrite-testing.mdc`)
+- Headless Vulkan device, queues (`src/gpu/headless_context.hpp`)
+- `StorageBuffer`, `ComputePipeline` (`src/gpu/`); ref-parity `executeCompute` / full pipeline wrapper — follow-on Phase 0
+- Shader embed CMake path (`shader-build-embed.mdc`)
+- Config header + generator (`nlrc_vksplat_config.hpp`, `VKSPLAT_*`, emulate flags)
+
+## Phase 1 — Subgraph D
+
+| Order | Kernel | Why |
+|-------|--------|-----|
+| 1 | `cumsum_*` | A tile indexing, `where`, E/F prune |
+| 2 | `sum` | Densification sizing |
+| 3 | `where` | Compaction |
+
+## Phase 2 — Radix sort
+
+`radix_sort/*.comp`: `upsweep` → `spine` → `downsweep` as one unit. Port before Subgraph A integration. Re-run on `ohos-debug` when available (`ref/docs/ohos-maleoon910-porting-report.md`).
+
+## Phase 3 — Subgraph A
+
+| Order | Kernel |
+|-------|--------|
+| 1 | `projection_forward` |
+| 2 | `generate_keys` |
+| 3 | `compute_tile_ranges` |
+| 4 | `rasterize_forward` |
+
+**Gate:** wire `forward()` only after all four pass isolated tests. Do not start Subgraph B until this gate passes.
+
+## Phase 4 — Subgraph B
+
+`ssim_forward`, `ssim_backward`
+
+## Phase 5 — Subgraph C
+
+`rasterize_backward_*` (all ref scheduler variants), then `fused_projection_backward_optimizer`
+
+## Phase 6 — Subgraph G
+
+Morton kernels (required before E end-of-step reorder)
+
+## Phase 7 — Subgraph E (default ADC)
+
+`default_*` chain per `shader-pipeline.md`; reuses D + G
+
+## Phase 8 — Subgraph F (MCMC)
+
+**Deferred** until Phase 7 is complete and integrated. Do not interleave E/F porting.
+
+## Phase 9 — E2E smoke
+
+Tiny scene, loss trend — see `rewrite-testing.mdc`
+
+## Rules
+
+- Fixture-first + binding contract at every kernel
+- Do not wire `train_step` until Phases 3–7 gates pass
+- Do not skip Phases 1–2 to test rasterize first
+- Mark stages done using SPIR-V names from shader-pipeline shader index
+
+## Deferred (Phase 2 scope)
+
+Python bindings, viewer, perf scheduler; Thompson scheduling optimization (port all backward variants ref exposes first)

@@ -43,7 +43,8 @@
       "cmakeExecutable": "$env{OHOS_SDK_NATIVE}/build-tools/cmake/bin/cmake",
       "cacheVariables": {
         "OHOS_ARCH": "arm64-v8a",
-        "OHOS_STL": "c++_shared"
+        "OHOS_STL": "c++_shared",
+        "NLRC_VKSPLAT_EMULATE_INT64": "ON"
       },
       "condition": {
         "type": "notEquals",
@@ -90,6 +91,22 @@
         "release",
         "ohos-base"
       ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ],
   "buildPresets": [

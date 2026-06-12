@@ -31,9 +31,12 @@ Mobile GPUs are sensitive to alignment. Host/device structs, push constants (max
 ## Descriptor model
 
 - Descriptor set 0: sequential `VK_DESCRIPTOR_TYPE_STORAGE_BUFFER` bindings 0..N-1
+- Per-kernel binding order: see `rewrite-buffer-contract.mdc` (not inferred from `VulkanGSPipelineBuffers` member order)
 - Push constants: camera, step, learning rates, image size, etc.
 - No textures — all data in storage buffers
 
 ## Abstractions
 
-Reuse rewrite abstractions once introduced (`VulkanGSPipeline`, `_VulkanBuffer`, `Buffer<T>`, `_ComputePipeline`). Do not copy ref internals (`PACK_STRUCT`, `_THROW_ERROR`) without reason.
+Reuse rewrite abstractions once introduced (`VulkanGSPipeline`, `_VulkanBuffer`, `Buffer<T>`, `_ComputePipeline`). Do not copy ref `PACK_STRUCT` packing.
+
+Error handling: `rewrite-error-handling.mdc` — use `check_vk`, not `_THROW_ERROR`.

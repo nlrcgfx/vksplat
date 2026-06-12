@@ -12,7 +12,7 @@ Applies to `next/nlrc_vksplat/` only. Keep rules binary and checkable.
 
 - Use **`.hpp`** for headers and **`.cpp`** for sources — never `.h` or `.c`
 - **`#pragma once`** in every header
-- Namespace **`nlrc::vksplat`** for library code
+- Namespace **`nlrc::vksplat`** for library code (`nlrc::vksplat::shaders` for embedded SPIR-V)
 - Paired TUs: `foo.hpp` + `foo.cpp`; declarations in hpp, definitions in cpp (templates / header-only `constexpr` in hpp when required)
 - No **`using namespace`** in headers
 
@@ -23,6 +23,22 @@ Applies to `next/nlrc_vksplat/` only. Keep rules binary and checkable.
 // GOOD
 #include "buffer.hpp"
 ```
+
+## Naming (clang-tidy SSOT: `next/nlrc_vksplat/.clang-tidy`)
+
+| Kind | Convention | Example |
+|------|------------|---------|
+| Namespace | `lower_case` | `nlrc::vksplat` |
+| Types / structs / enums | `CamelCase` | `TensorBwdConfig`, `SortingKey` |
+| Functions / locals / parameters | `snake_case` | `tensor_bwd_shared_memory` |
+| Private/protected members | `snake_case` + `_` | `buffer_` |
+| Compile-time constants | `k` + `CamelCase` | `kTileSize`, `kSmokeSpirv` |
+| Enum constants | `CamelCase` | `PipelineStage::ProjectionForward` |
+
+Forbidden in new code:
+
+- Ref-style `*_t` type aliases (`sortingKey_t`) — use `using SortingKey = ...`
+- camelCase free functions (`tensorBwdSharedMemory`)
 
 ## const and constexpr
 
@@ -40,12 +56,48 @@ int tile_size = 16;
 inline constexpr int kTileSize = 16;
 ```
 
+## Macros
+
+Allowed:
+
+- `VKSPLAT_*` in `nlrc_vksplat_config.hpp` only (shader generator contract)
+- `#pragma once`
+
+Forbidden in new `next/` code:
+
+- Function-like macros (`MIN`, `MAX`, `CLAMP`) — use `std::min`, `constexpr`, or templates
+- Unscoped logic macros — prefer `inline constexpr` or `if constexpr`
+
+C++ below `namespace nlrc::vksplat` in the config header:
+
+- No `typedef` — use `using`
+- `bool` for semantic on/off flags; `int` only for numeric shader parameters mirrored from `VKSPLAT_*`
+
 ## Types and APIs
 
+- Prefer **`using`** over **`typedef`**
 - Prefer **`enum class`** over unscoped `enum` (unless C/Vulkan ABI requires raw `enum`)
 - Mark single-argument constructors **`explicit`** unless implicit conversion is intentional (add a brief comment)
 - Apply **`[[nodiscard]]`** to getters, handles, and status/error returns
+- Use **`override`** / **`final`** on virtual hierarchies; **`= default`** / **`= delete`** where appropriate
+- No raw **`new`** / **`delete`** — RAII wrappers
+- No C-style casts — `static_cast` / `reinterpret_cast` with justification
+- Vulkan/pipeline code: see `rewrite-error-handling.mdc` for `check_vk` and `[[nodiscard]]` status wrappers
+
+## Generated C++
+
+- `*_spirv.hpp` is emitted only by `spirv_to_header()` in `scripts/compile_shaders.py` — never hand-edit
+- Embed symbols: `k{Name}Spirv[]` and `k{Name}SpirvWordCount` in `nlrc::vksplat::shaders` — see `shader-build-embed.mdc`
+- Generated headers must pass the same **clang-format** and **clang-tidy** checks as hand-written code (enforced at shader build time)
 
 ## Tooling
 
 Naming follows [`.clang-tidy`](next/nlrc_vksplat/.clang-tidy); formatting follows [`.clang-format`](next/nlrc_vksplat/.clang-format).
+
+Blocking lint:
+
+- CMake target **`nlrc_vksplat_lint`** runs `scripts/lint_cpp.py` (clang-format `--Werror` + clang-tidy)
+- **`nlrc_vksplat_core`** depends on lint — every build must pass
+- Shader generation runs clang-format/tidy on each `*_spirv.hpp` before the build proceeds
+
+After any C++ or `spirv_to_header()` change: configure preset, then `cmake --build --preset <preset>` (or `--target nlrc_vksplat_lint`).

@@ -1,0 +1,23 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "harness_smoke",
+  "subgraph": "harness",
+  "bindings": [],
+  "buffers": {
+    "output_a": "output_a.bin"
+  },
+  "shapes": {
+    "output_a": [4]
+  },
+  "dtypes": {
+    "output_a": "float32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "vkbd_source": "synthetic",
+  "epsilon": {
+    "output_a": 1e-5
+  },
+  "notes": "Synthetic golden for harness compare helpers"
+}

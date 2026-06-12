@@ -1,0 +1,58 @@
+---
+description: Buffer names, descriptor binding order, and std430 layout parity with ref
+globs: next/**/*.{hpp,cpp},next/**/tests/**,test_data/**
+alwaysApply: false
+---
+
+# Buffer and Binding Contract
+
+Parity contract for rewrite dispatches and golden tests. Read before porting each kernel.
+
+## Authoritative sources
+
+| What | Where |
+|------|--------|
+| Buffer field names and shapes | `ref/vksplat/src/buffer.h` — `VulkanGSPipelineBuffers` |
+| Per-kernel binding tables | `ref/docs/shader-pipeline.md` — subgraph sections + shader index |
+| C++ dispatch wiring | `ref/vksplat/src/gs_renderer.cpp`, `gs_trainer.cpp` — vector passed to `executeCompute` |
+| Config-dependent types | `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` — `RectTileSpace`, `SortingKey` vs `VKSPLAT_USE_EMULATED_INT64` |
+
+## Binding contract
+
+Ref API: `executeCompute(dims, uniformsPtr, uniformSize, pipeline, buffers)`.
+
+- `buffers[i]` → descriptor binding `i` (`VK_DESCRIPTOR_TYPE_STORAGE_BUFFER`).
+- Vector order must match the **Bind** column in `shader-pipeline.md` for that kernel — not alphabetical order, not `VulkanGSPipelineBuffers` member order.
+- Use `buffer.h` identifiers in docs, manifests, and tests (`xyz_ws`, `rect_tile_space`, …).
+
+`projection_forward` example (bindings 0–10): `xyz_ws`, `sh_coeffs`, `rotations`, `scales_opacs`, `tiles_touched`, `rect_tile_space`, `radii`, `xy_vs`, `depths`, `inv_cov_vs_opacity`, `rgb`.
+
+```cpp
+// BAD — struct declaration order
+executeCompute(..., { scales_opacs, xyz_ws, ... });
+
+// GOOD — shader-pipeline.md Bind column order
+executeCompute(..., { xyz_ws, sh_coeffs, rotations, scales_opacs, tiles_touched, ... });
+```
+
+## Layout contract
+
+| Ref (do not copy) | Rewrite |
+|-------------------|---------|
+| `PACK_STRUCT` | `alignas()` + `static_assert(sizeof)` |
+| Implicit packing | `std430` in C++ and Slang/GLSL |
+
+- Push constants ≤ 192 bytes: `static_assert(sizeof(Uniforms) <= 192)`.
+- `rect_tile_space` may be `(N,)` or `(2N,)` when int64 is emulated — record profile flags in fixture manifests.
+
+## Parity checklist (per stage)
+
+1. Verify binding table in `shader-pipeline.md` for this SPIR-V name.
+2. Host buffer vector length == shader binding count.
+3. Push constant size matches shader.
+4. Fixture/golden `manifest.json` includes `bindings[]` in descriptor order.
+5. Golden failure: verify bindings and dtypes before changing shader logic.
+
+## Tests
+
+Goldens assume this contract; invariant tests do not catch swapped bindings. See `rewrite-testing.mdc`. Port order: `rewrite-porting-order.mdc` (contract applies at every phase).

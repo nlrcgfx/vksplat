@@ -13,6 +13,8 @@ option(NLRC_VKSPLAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 
 include(cmake/NlrcVksplatWarnings.cmake)
 include(cmake/NlrcVksplatCompileOptions.cmake)
+include(cmake/NlrcVksplatShaders.cmake)
+include(cmake/NlrcVksplatLint.cmake)
 
 find_package(Vulkan REQUIRED)
 
@@ -27,6 +29,16 @@ target_link_libraries(nlrc_vksplat_core PRIVATE
   nlrc_vksplat_warnings
   nlrc_vksplat_compile_options
 )
+
+nlrc_vksplat_link_shaders(nlrc_vksplat_core)
+nlrc_vksplat_add_lint_targets(nlrc_vksplat_core)
+
+include(cmake/NlrcVksplatTests.cmake)
+if(NLRC_VKSPLAT_BUILD_TESTS)
+  include(CTest)
+  enable_testing()
+endif()
+nlrc_vksplat_setup_tests()
 
 # Sync compile commands for clangd and other tools
 include(cmake/NlrcVksplatCompileCommands.cmake)

@@ -2,8 +2,13 @@
   "cmake.sourceDirectory": "${workspaceFolder}/next/nlrc_vksplat",
   "cmake.useCMakePresets": "always",
 
+  "editor.rulers": [120],
+
   "C_Cpp.intelliSenseEngine": "disabled",
   "clangd.detectExtensionConflicts": true,
+  "clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}/next/nlrc_vksplat/build"
+  ],
 
   "[cpp]": {
     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",

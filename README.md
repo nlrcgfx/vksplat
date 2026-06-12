@@ -16,15 +16,20 @@ Reference baseline tag: **`ref-baseline-2026-06-12`**
 
 ## Quick start (rewrite)
 
-Build the scaffold library:
+Requires **Python 3**, **Vulkan SDK** (`slangc` and `glslc` on `PATH`), and a Ninja-capable C++ toolchain. Shaders compile at build time into embedded SPIR-V headers under `build/<preset>/generated/`.
 
 ```bash
 cd next/nlrc_vksplat
-cmake --preset windows-release
-cmake --build --preset windows-release
+cmake --preset windows-debug
+cmake --build --preset windows-debug
+ctest --preset windows-debug
 ```
 
+CMake profile options (subset of config): `NLRC_VKSPLAT_EMULATE_INT64`, `NLRC_VKSPLAT_EMULATE_F32_ATOMIC`. OHOS presets enable emulated int64 by default. Full numeric constants live in `src/nlrc_vksplat_config.hpp`. See `.cursor/rules/shader-build-embed.mdc`.
+
 **VS Code / Cursor:** open the repo root, install the recommended extensions when prompted, then run **CMake: Configure** (or `cmake --preset windows-debug`) so `build/compile_commands.json` is available for clangd.
+
+**C++ lint:** every build runs blocking `clang-format` + `clang-tidy` via the `nlrc_vksplat_lint` target. Shader generation also lint-checks each `*_spirv.hpp`. Run lint alone with `cmake --build --preset windows-debug --target nlrc_vksplat_lint`. Style rules: `.cursor/rules/cpp-coding-style.mdc`.
 
 ## Quick start (reference)
 

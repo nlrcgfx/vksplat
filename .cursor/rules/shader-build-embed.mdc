@@ -1,41 +1,103 @@
 ---
-description: CMake-time shader compile and embedded SPIR-V headers
-globs: next/**/*.{slang,comp,glsl,cmake,txt}
+description: CMake-time shader compile and embedded SPIR-V headers (gap #4)
+globs: next/**/*.{slang,comp,glsl,cmake,txt,hpp}
 alwaysApply: false
 ---
 
-# Shader & Build Integration
+# Shader & Build Integration (Gap #4)
 
 Applies to the rewrite (`next/nlrc_vksplat/`). Differs from ref, which loads `.spv` from disk at runtime.
 
-## Build-time compilation
+## SSOT split
 
-1. CMake compiles shaders to SPIR-V at build time
-2. SPIR-V converts to C++ headers as `uint32_t` bytecode arrays
-3. C++ includes the generated header and passes the array to `VkShaderModuleCreateInfo`
+| Layer | Role |
+|-------|------|
+| [`nlrc_vksplat_config.hpp`](next/nlrc_vksplat/src/nlrc_vksplat_config.hpp) | All numeric `VKSPLAT_*` constants (`#define` form for the generator) |
+| CMake options | Profile subset only: `NLRC_VKSPLAT_EMULATE_INT64`, `NLRC_VKSPLAT_EMULATE_F32_ATOMIC` |
+| `target_compile_definitions` | `VKSPLAT_USE_EMULATED_INT64`, `VKSPLAT_USE_EMULATED_F32_ATOMIC` on `nlrc_vksplat_core` |
+
+Do not duplicate tile sizes, workgroup sizes, or tensor-bwd tables as CMake `option()`s.
+
+## Build entry point
+
+Single orchestrator: [`scripts/compile_shaders.py`](next/nlrc_vksplat/scripts/compile_shaders.py)
+
+1. Calls `generate_shader_config()` (ported from ref)
+2. Compiles Slang / GLSL jobs
+3. Emits embedded SPIR-V headers
+4. Writes `shader_manifest.json`
+
+CMake target `nlrc_vksplat_shaders` invokes the script; `nlrc_vksplat_core` **depends** on it. Configure fails if Python, `slangc`, or `glslc` is missing.
+
+## Generated artifacts
+
+All under `${CMAKE_BINARY_DIR}/generated/` (not committed):
+
+- `config_generated.slang`, `config_generated.glsl` — shader-side config fragments
+- `shader_config.json` — CI/debug manifest; runtime validation deferred
+- `shader_manifest.json` — module name → header, compile defines
+- `<name>_spirv.hpp` — embedded bytecode per shader job
+
+Per-preset build trees (`build/windows-debug/` vs `build/ohos-debug/`) isolate profiles; no runtime shader search paths.
+
+## Embed header contract
+
+Each `*_spirv.hpp` is emitted by `spirv_to_header()` in `compile_shaders.py` and verified with blocking **clang-format** + **clang-tidy** at shader build time. Symbol names follow `cpp-coding-style.mdc` (`k` + `CamelCase`):
+
+| Job name `smoke` | Array symbol | Word-count symbol |
+|------------------|--------------|-------------------|
+| `smoke` | `kSmokeSpirv` | `kSmokeSpirvWordCount` |
 
 ```cpp
-// BAD — runtime disk load (ref pattern, not for rewrite)
+namespace nlrc::vksplat::shaders {
+inline constexpr uint32_t kSmokeSpirv[] = { ... };
+inline constexpr uint32_t kSmokeSpirvWordCount = ...;
+}
+```
+
+C++ passes the array to `VkShaderModuleCreateInfo::pCode` / `codeSize`.
+
+```cpp
+// BAD — runtime disk load (ref pattern)
 createComputePipeline(pipeline, "shader/generated/foo.spv");
 
 // GOOD — embedded bytecode
-#include "generated/foo_spirv.hpp"
-createShaderModule(std::vector<uint32_t>(foo_spirv, foo_spirv + foo_spirv_len), &module);
+#include "smoke_spirv.hpp"
+createShaderModule({shaders::kSmokeSpirv, shaders::kSmokeSpirv + shaders::kSmokeSpirvWordCount}, &module);
 ```
 
 ## Shader languages
 
-- Slang: all core compute kernels
+- Slang: core compute kernels (`slang/`)
 - GLSL 460: radix sort only (`shader/radix_sort/*.comp`)
 
-## Config propagation
+Add jobs to `compile_shaders.py` as kernels are ported (Phase 1+); gap #4 ships infrastructure + `smoke.slang` only.
 
-`vksplat_config.h` drives `VKSPLAT_*` constants. Port or reuse logic from `ref/vksplat/scripts/generate_shader_config.py` to emit Slang/GLSL fragments and `shader_config.json`.
+## Runtime policy
 
-## CMake dependencies
+Embedding does **not** block multi-variant selection. Same as ref:
 
-Editing `.slang`, `.comp`, or `.glsl` must rebuild the generated header and any C++ TU that includes it.
+- **Prebuilt variants** at compile time (emulate flags, tensor-bwd backward modes, `EXPORT_MODE`)
+- **Runtime pick** among embedded modules (scheduler / tests pin one variant)
+- **Pipeline create flags** — e.g. `VK_EXT_subgroup_size_control` with same SPIR-V
+- **Skip** pipeline when `min_shared_memory` exceeds device limit
+- **No** on-device `slangc` / `glslc`
+
+## OHOS presets
+
+`ohos-*` presets set `NLRC_VKSPLAT_EMULATE_INT64=ON` (Maleoon int64 path). Windows presets default both emulate flags `OFF`. Record `cmake_preset`, `emulate_int64`, `emulate_f32_atomic` in test manifests (`rewrite-testing.mdc`).
+
+## CI
+
+- Full shader compile on CI with Vulkan SDK (`slangc`, `glslc` on PATH)
+- Optional: `generate_shader_config.py --check` when committing generated fragments (rewrite does **not** commit them)
+
+## Forbidden
+
+- `ref/compile_shaders.py` from rewrite CMake
+- Runtime `loadSpirv(path)` / shipping `.spv` beside the binary
+- Hand-editing `config_generated.*` or `*_spirv.hpp`
 
 ## Porting reference
 
-Shader sources to port from: `ref/vksplat/slang/` and `ref/vksplat/shader/radix_sort/`.
+Shader sources: `ref/vksplat/slang/`, `ref/vksplat/shader/radix_sort/`. Config generator: `ref/vksplat/scripts/generate_shader_config.py`.

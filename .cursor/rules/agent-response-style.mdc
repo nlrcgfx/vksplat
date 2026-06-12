@@ -9,4 +9,11 @@ alwaysApply: true
 - Preserve existing rewrite abstractions; do not reinvent buffer/pipeline wrappers each session
 - When porting from ref, flag ARM64 alignment, workgroup-size, subgroup-size, and atomic/int64 traps (see `ref/docs/ohos-maleoon910-porting-report.md`)
 - When comparing behavior, use ref stage names and buffer names from `VulkanGSPipelineBuffers` in `ref/vksplat/src/buffer.h`
+- For each `executeCompute` dispatch, verify descriptor binding order against `rewrite-buffer-contract.mdc` and the subgraph table in `shader-pipeline.md`
 - Cite specific files and subgraphs (A–G) from `ref/docs/shader-pipeline.md` rather than paraphrasing the pipeline from memory
+- When porting a shader stage, follow fixture-first isolation in `rewrite-testing.mdc` — do not wire full training paths before per-dispatch tests pass
+- Follow phased port order in `rewrite-porting-order.mdc`; do not integrate training-step paths ahead of the current phase gate
+- Do not ignore `VkResult`; use `check_vk` per `rewrite-error-handling.mdc`
+- Shader build: embedded SPIR-V via `shader-build-embed.mdc`; config SSOT is `nlrc_vksplat_config.hpp`, not CMake tile/workgroup constants
+- Stage tests: fixture + golden workflow in `rewrite-testing.mdc`; run `ctest --preset windows-debug` after harness changes
+- After C++ or shader-generator edits: run blocking lint (`cmake --build --preset <preset> --target nlrc_vksplat_lint` or full build); follow `cpp-coding-style.mdc`

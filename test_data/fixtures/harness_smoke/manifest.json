@@ -1,0 +1,19 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "harness_smoke",
+  "subgraph": "harness",
+  "bindings": [],
+  "buffers": {
+    "input_a": "input_a.bin"
+  },
+  "shapes": {
+    "input_a": [4]
+  },
+  "dtypes": {
+    "input_a": "float32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "notes": "Synthetic harness fixture for gap #5 loader tests"
+}
