@@ -16,6 +16,7 @@ inline constexpr std::uint32_t kSumBindingCount = 2;
 inline constexpr std::uint32_t kWhereBindingCount = 3;
 inline constexpr std::uint32_t kGenerateKeysBindingCount = 7;
 inline constexpr std::uint32_t kComputeTileRangesBindingCount = 2;
+inline constexpr std::uint32_t kRasterizeForwardBindingCount = 7;
 inline constexpr std::uint32_t kProjectionForwardBindingCount = 11;
 inline constexpr std::uint32_t kRadixSortUpsweepBindingCount = 3;
 inline constexpr std::uint32_t kRadixSortSpineBindingCount = 2;
@@ -89,6 +90,16 @@ struct ComputeTileRangesBindings final {
   StorageBuffer *tile_ranges{};
 };
 
+struct RasterizeForwardBindings final {
+  const StorageBuffer *sorted_gauss_idx{};
+  const StorageBuffer *tile_ranges{};
+  const StorageBuffer *xy_vs{};
+  const StorageBuffer *inv_cov_vs_opacity{};
+  const StorageBuffer *rgb{};
+  StorageBuffer *pixel_state{};
+  StorageBuffer *n_contributors{};
+};
+
 struct RadixSortBindings final {
   StorageBuffer *keys_1{};
   StorageBuffer *indices_1{};
@@ -133,6 +144,11 @@ void execute_compute_tile_ranges(const HeadlessContext &context,
                                  const ComputeTileRangesBindings &bindings,
                                  const RendererUniforms &uniforms,
                                  std::size_t num_indices);
+
+void execute_rasterize_forward(const HeadlessContext &context,
+                               const RasterizeForwardBindings &bindings,
+                               const RendererUniforms &uniforms,
+                               std::size_t num_indices);
 
 [[nodiscard]] RadixSortResult
 execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count);

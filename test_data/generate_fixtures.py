@@ -174,6 +174,11 @@ def stage_relpath(stage_name: str, subgraph: str) -> Path:
             return Path("compute_tile_ranges") / stage_name.removeprefix("compute_tile_ranges_")
         raise ValueError(f"unsupported compute_tile_ranges stage: {stage_name}")
 
+    if subgraph == "rasterize_forward":
+        if stage_name.startswith("rasterize_forward_"):
+            return Path("rasterize_forward") / stage_name.removeprefix("rasterize_forward_")
+        raise ValueError(f"unsupported rasterize_forward stage: {stage_name}")
+
     raise ValueError(f"unsupported subgraph for stage layout: {subgraph}")
 
 
@@ -595,6 +600,123 @@ def compute_tile_ranges_case() -> FixtureCase:
     )
 
 
+def tile_ranges_from_sorted_keys(sorted_keys: tuple[int, ...], grid_width: int, grid_height: int) -> tuple[int, ...]:
+    depth_bits = depth_bits_for_grid(grid_width, grid_height)
+    num_tiles = grid_width * grid_height
+    tile_ranges = [0] * (num_tiles + 1)
+
+    prev_tile = -1
+    for index in range(len(sorted_keys) + 1):
+        curr_tile = num_tiles if index == len(sorted_keys) else sorted_keys[index] >> depth_bits
+        for tile_id in range(prev_tile + 1, curr_tile + 1):
+            tile_ranges[tile_id] = index
+        prev_tile = curr_tile
+
+    return tuple(tile_ranges)
+
+
+def rasterize_forward_case(
+    stage_name: str,
+    grid_width: int,
+    grid_height: int,
+    tile_ids: tuple[int, ...],
+    depths: tuple[float, ...],
+    xy_vs_pairs: tuple[tuple[float, float], ...],
+    inv_cov_vs_opacity_values: tuple[tuple[float, float, float, float], ...],
+    rgb_values: tuple[tuple[float, float, float], ...],
+    notes: str,
+) -> FixtureCase:
+    if not (
+        len(tile_ids)
+        == len(depths)
+        == len(xy_vs_pairs)
+        == len(inv_cov_vs_opacity_values)
+        == len(rgb_values)
+    ):
+        raise ValueError(f"{stage_name}: raster fixture input lengths must match")
+
+    depth_bits = depth_bits_for_grid(grid_width, grid_height)
+    sorted_keys = tuple(
+        (tile_id << depth_bits) | generate_keys_depth_code(depth, depth_bits)
+        for tile_id, depth in zip(tile_ids, depths)
+    )
+    tile_ranges = tile_ranges_from_sorted_keys(sorted_keys, grid_width, grid_height)
+    num_splats = len(tile_ids)
+    image_width = TILE_WIDTH * grid_width
+    image_height = TILE_HEIGHT * grid_height
+    num_pixels = image_width * image_height
+
+    xy_vs = tuple(component for pair in xy_vs_pairs for component in pair)
+    inv_cov_vs_opacity = tuple(component for value in inv_cov_vs_opacity_values for component in value)
+    rgb = tuple(component for value in rgb_values for component in value)
+
+    return FixtureCase(
+        stage_name=stage_name,
+        subgraph="rasterize_forward",
+        fixture_bindings=(
+            "sorted_gauss_idx",
+            "tile_ranges",
+            "xy_vs",
+            "inv_cov_vs_opacity",
+            "rgb",
+            "pixel_state",
+            "n_contributors",
+        ),
+        fixture_buffers=(
+            BufferData("sorted_keys", "uint32", (len(sorted_keys),), sorted_keys),
+            BufferData("sorted_gauss_idx", "int32", (num_splats,), tuple(range(num_splats))),
+            BufferData("tile_ranges", "int32", (grid_width * grid_height + 1,), tile_ranges),
+            BufferData("xy_vs", "float32", (num_splats, 2), xy_vs),
+            BufferData("inv_cov_vs_opacity", "float32", (num_splats, 4), inv_cov_vs_opacity),
+            BufferData("rgb", "float32", (num_splats, 3), rgb),
+            BufferData("pixel_state", "float32", (image_height, image_width, 4), [-1.0] * (num_pixels * 4)),
+            BufferData("n_contributors", "int32", (image_height, image_width), [-1] * num_pixels),
+        ),
+        golden_bindings=(),
+        golden_buffers=(),
+        fixture_notes=(
+            f"Synthetic rasterize_forward invariant fixture for {notes}; sorted_keys are included "
+            "as unbound provenance for tile_ranges"
+        ),
+        golden_notes=(
+            "Invariant-only rasterize_forward case; no exact rendered pixel golden is committed for this stage"
+        ),
+        uniforms={
+            "image_height": image_height,
+            "image_width": image_width,
+            "grid_height": grid_height,
+            "grid_width": grid_width,
+            "num_splats": num_splats,
+            "active_sh": 0,
+            "step": 0,
+            "camera_model": 0,
+            "fx": 16.0,
+            "fy": 16.0,
+            "cx": 16.0,
+            "cy": 16.0,
+            "dist_coeffs": [0.0, 0.0, 0.0, 0.0],
+            "world_view_transform": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ],
+        },
+    )
+
+
 def fixture_cases() -> tuple[FixtureCase, ...]:
     near_block_values = tuple((index % 7) - 3 for index in range(CUMSUM_BLOCK_SIZE - 1))
     exact_block_values = tuple(1 for _ in range(CUMSUM_BLOCK_SIZE))
@@ -675,6 +797,33 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         generate_keys_case("generate_keys_native_int64", 0),
         generate_keys_case("generate_keys_emulated_int64", 1),
         compute_tile_ranges_case(),
+        rasterize_forward_case(
+            "rasterize_forward_single_splat",
+            2,
+            2,
+            (0,),
+            (1.0,),
+            ((8.0, 8.0),),
+            ((0.5, 0.0, 0.5, 0.8),),
+            ((1.0, 0.25, 0.125),),
+            "one centered splat in the first tile of a 2x2 grid",
+        ),
+        rasterize_forward_case(
+            "rasterize_forward_multi_tile",
+            3,
+            2,
+            (1, 1, 3, 4),
+            (1.0, 2.0, 3.0, 7.0),
+            ((20.0, 8.0), (28.0, 8.0), (8.0, 24.0), (24.0, 24.0)),
+            (
+                (0.5, 0.0, 0.5, 0.75),
+                (0.5, 0.0, 0.5, 0.7),
+                (0.5, 0.0, 0.5, 0.65),
+                (0.5, 0.0, 0.5, 0.6),
+            ),
+            ((1.0, 0.2, 0.1), (0.1, 1.0, 0.2), (0.2, 0.1, 1.0), (1.0, 1.0, 0.2)),
+            "duplicate tile entries, empty tile gaps, and non-empty lower-row tiles in a 3x2 grid",
+        ),
     )
 
 

@@ -16,6 +16,7 @@
 #include "radix_sort_downsweep_spirv.hpp"
 #include "radix_sort_spine_spirv.hpp"
 #include "radix_sort_upsweep_spirv.hpp"
+#include "rasterize_forward_spirv.hpp"
 #include "span.hpp"
 #include "sum_spirv.hpp"
 #include "where_spirv.hpp"
@@ -152,6 +153,21 @@ void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
   return grid_height * grid_width;
 }
 
+[[nodiscard]] std::size_t require_pixel_count(const RendererUniforms &uniforms) {
+  if (uniforms.image_width == 0U) {
+    throw std::invalid_argument("image_width must be > 0");
+  }
+  if (uniforms.image_height == 0U) {
+    throw std::invalid_argument("image_height must be > 0");
+  }
+  const auto image_width = static_cast<std::size_t>(uniforms.image_width);
+  const auto image_height = static_cast<std::size_t>(uniforms.image_height);
+  if (image_height > std::numeric_limits<std::size_t>::max() / image_width) {
+    throw std::invalid_argument("pixel count overflows size_t");
+  }
+  return image_height * image_width;
+}
+
 void validate_compute_tile_ranges_bindings(const ComputeTileRangesBindings &bindings,
                                            std::size_t num_indices,
                                            std::size_t num_tiles) {
@@ -160,6 +176,28 @@ void validate_compute_tile_ranges_bindings(const ComputeTileRangesBindings &bind
 
   require_buffer_elements<SortingKey>(*bindings.sorted_keys, num_indices, "sorted_keys");
   require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
+}
+
+void validate_rasterize_forward_bindings(const RasterizeForwardBindings &bindings,
+                                         std::size_t num_splats,
+                                         std::size_t num_indices,
+                                         std::size_t num_tiles,
+                                         std::size_t num_pixels) {
+  require_binding(bindings.sorted_gauss_idx, "sorted_gauss_idx");
+  require_binding(bindings.tile_ranges, "tile_ranges");
+  require_binding(bindings.xy_vs, "xy_vs");
+  require_binding(bindings.inv_cov_vs_opacity, "inv_cov_vs_opacity");
+  require_binding(bindings.rgb, "rgb");
+  require_binding(bindings.pixel_state, "pixel_state");
+  require_binding(bindings.n_contributors, "n_contributors");
+
+  require_buffer_elements<std::int32_t>(*bindings.sorted_gauss_idx, num_indices, "sorted_gauss_idx");
+  require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
+  require_buffer_elements<float>(*bindings.xy_vs, num_splats * 2U, "xy_vs");
+  require_buffer_elements<float>(*bindings.inv_cov_vs_opacity, num_splats * 4U, "inv_cov_vs_opacity");
+  require_buffer_elements<float>(*bindings.rgb, num_splats * 3U, "rgb");
+  require_buffer_elements<float>(*bindings.pixel_state, num_pixels * 4U, "pixel_state");
+  require_buffer_elements<std::int32_t>(*bindings.n_contributors, num_pixels, "n_contributors");
 }
 
 void validate_radix_sort_bindings(const RadixSortBindings &bindings, std::size_t element_count) {
@@ -352,6 +390,38 @@ void execute_compute_tile_ranges(const HeadlessContext &context,
 
   const auto push_constants = ByteView::from_object(tile_range_uniforms);
   pipeline.dispatch(dispatch_groups_for(num_indices + 1U, VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS), push_constants);
+}
+
+void execute_rasterize_forward(const HeadlessContext &context,
+                               const RasterizeForwardBindings &bindings,
+                               const RendererUniforms &uniforms,
+                               std::size_t num_indices) {
+  require_uint32_count(num_indices, "num_indices");
+  const auto num_splats = static_cast<std::size_t>(require_uint32_count(uniforms.num_splats, "num_splats"));
+  const auto num_tiles = require_tile_count(uniforms);
+  const auto num_pixels = require_pixel_count(uniforms);
+  validate_rasterize_forward_bindings(bindings, num_splats, num_indices, num_tiles, num_pixels);
+
+  auto spirv = make_span(shaders::kRasterizeForwardSpirv);
+  ComputePipeline pipeline(context, spirv, kRasterizeForwardBindingCount, sizeof(RendererUniforms));
+
+  pipeline.bind_storage_buffers({
+      bindings.sorted_gauss_idx,
+      bindings.tile_ranges,
+      bindings.xy_vs,
+      bindings.inv_cov_vs_opacity,
+      bindings.rgb,
+      bindings.pixel_state,
+      bindings.n_contributors,
+  });
+
+  const auto groups_x =
+      require_uint32_count(ceil_div(uniforms.image_width, VKSPLAT_TILE_WIDTH), "rasterize_forward groups_x");
+  const auto groups_y =
+      require_uint32_count(ceil_div(uniforms.image_height, VKSPLAT_TILE_HEIGHT), "rasterize_forward groups_y");
+  const DispatchShape dispatch_shape{groups_x, groups_y, 1U};
+  const auto push_constants = ByteView::from_object(uniforms);
+  pipeline.dispatch(dispatch_shape, push_constants);
 }
 
 auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count)

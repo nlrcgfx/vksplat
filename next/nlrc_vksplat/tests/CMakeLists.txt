@@ -91,6 +91,7 @@ target_sources(nlrc_vksplat_tests
     test_manifest_profile.cpp
     test_projection_forward.cpp
     test_radix_sort.cpp
+    test_rasterize_forward.cpp
     test_shader_config_profile.cpp
     test_utility_shaders.cpp
 )

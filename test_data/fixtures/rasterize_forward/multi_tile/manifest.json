@@ -1,0 +1,110 @@
+{
+  "ref_baseline_tag": "ref-baseline-2026-06-12",
+  "stage_name": "rasterize_forward_multi_tile",
+  "subgraph": "rasterize_forward",
+  "bindings": [
+    "sorted_gauss_idx",
+    "tile_ranges",
+    "xy_vs",
+    "inv_cov_vs_opacity",
+    "rgb",
+    "pixel_state",
+    "n_contributors"
+  ],
+  "buffers": {
+    "sorted_keys": "sorted_keys.bin",
+    "sorted_gauss_idx": "sorted_gauss_idx.bin",
+    "tile_ranges": "tile_ranges.bin",
+    "xy_vs": "xy_vs.bin",
+    "inv_cov_vs_opacity": "inv_cov_vs_opacity.bin",
+    "rgb": "rgb.bin",
+    "pixel_state": "pixel_state.bin",
+    "n_contributors": "n_contributors.bin"
+  },
+  "shapes": {
+    "sorted_keys": [
+      4
+    ],
+    "sorted_gauss_idx": [
+      4
+    ],
+    "tile_ranges": [
+      7
+    ],
+    "xy_vs": [
+      4,
+      2
+    ],
+    "inv_cov_vs_opacity": [
+      4,
+      4
+    ],
+    "rgb": [
+      4,
+      3
+    ],
+    "pixel_state": [
+      32,
+      48,
+      4
+    ],
+    "n_contributors": [
+      32,
+      48
+    ]
+  },
+  "dtypes": {
+    "sorted_keys": "uint32",
+    "sorted_gauss_idx": "int32",
+    "tile_ranges": "int32",
+    "xy_vs": "float32",
+    "inv_cov_vs_opacity": "float32",
+    "rgb": "float32",
+    "pixel_state": "float32",
+    "n_contributors": "int32"
+  },
+  "cmake_preset": "windows-debug",
+  "emulate_int64": 0,
+  "emulate_f32_atomic": 0,
+  "profile_agnostic": true,
+  "vkbd_source": "synthetic",
+  "uniforms": {
+    "image_height": 32,
+    "image_width": 48,
+    "grid_height": 2,
+    "grid_width": 3,
+    "num_splats": 4,
+    "active_sh": 0,
+    "step": 0,
+    "camera_model": 0,
+    "fx": 16.0,
+    "fy": 16.0,
+    "cx": 16.0,
+    "cy": 16.0,
+    "dist_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "world_view_transform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "notes": "Synthetic rasterize_forward invariant fixture for duplicate tile entries, empty tile gaps, and non-empty lower-row tiles in a 3x2 grid; sorted_keys are included as unbound provenance for tile_ranges"
+}
