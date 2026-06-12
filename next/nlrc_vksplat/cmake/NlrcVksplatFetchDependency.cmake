@@ -4,7 +4,7 @@ include(FetchContent)
 
 function(nlrc_vksplat_fetch_dependency)
   set(options)
-  set(one_value_args NAME URL URL_HASH LOCAL_ARCHIVE SOURCE_SUBDIR)
+  set(one_value_args NAME URL URL_HASH LOCAL_ARCHIVE)
   set(multi_value_args)
   cmake_parse_arguments(NLRC_VKSPLAT_DEP "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
@@ -28,19 +28,12 @@ function(nlrc_vksplat_fetch_dependency)
     )
   endif()
 
-  set(_nlrc_vksplat_declare_args
+  FetchContent_Declare(
+    "${NLRC_VKSPLAT_DEP_NAME}"
+    SYSTEM
     URL "${_nlrc_vksplat_source_url}"
     URL_HASH "${NLRC_VKSPLAT_DEP_URL_HASH}"
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  )
-
-  if(NLRC_VKSPLAT_DEP_SOURCE_SUBDIR)
-    list(APPEND _nlrc_vksplat_declare_args SOURCE_SUBDIR "${NLRC_VKSPLAT_DEP_SOURCE_SUBDIR}")
-  endif()
-
-  FetchContent_Declare(
-    "${NLRC_VKSPLAT_DEP_NAME}"
-    ${_nlrc_vksplat_declare_args}
   )
 
   FetchContent_MakeAvailable("${NLRC_VKSPLAT_DEP_NAME}")

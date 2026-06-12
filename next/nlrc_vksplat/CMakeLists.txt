@@ -15,6 +15,9 @@ endif()
 include(cmake/NlrcVksplatWarnings.cmake)
 include(cmake/NlrcVksplatCompileOptions.cmake)
 
+# Fetch dependencies: Catch2, nlohmann_json
+include(cmake/NlrcVksplatFetchDependency.cmake)
+
 # Shader build and embedded SPIR-V headers
 include(cmake/NlrcVksplatShaders.cmake)
 
@@ -50,11 +53,16 @@ target_link_libraries(nlrc_vksplat_core PRIVATE
 # Apply shader profile to the core library
 nlrc_vksplat_apply_shader_profile(nlrc_vksplat_core)
 
-include(cmake/NlrcVksplatTests.cmake)
-if(NLRC_VKSPLAT_BUILD_TESTS)
-  include(CTest)
-  enable_testing()
-  nlrc_vksplat_setup_tests()
+if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+  set(_NLRC_VKSPLAT_DEFAULT_BUILD_TESTING OFF)
+else()
+  set(_NLRC_VKSPLAT_DEFAULT_BUILD_TESTING ON)
+endif()
+
+option(BUILD_TESTING "Build tests" ${_NLRC_VKSPLAT_DEFAULT_BUILD_TESTING})
+include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
 endif()
 
 # Sync compile commands for clangd and other tools
