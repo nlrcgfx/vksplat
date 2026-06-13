@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 #include <vulkan/vulkan.h>
 
@@ -34,7 +35,7 @@ namespace nlrc::vksplat {
   }
 }
 
-inline void check_vk(VkResult result, const char *context) {
+inline void check_vk(VkResult result, std::string_view context) {
   if (result == VK_SUCCESS) {
     return;
   }
