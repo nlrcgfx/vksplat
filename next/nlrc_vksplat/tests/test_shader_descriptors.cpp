@@ -1,6 +1,10 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
+#include <map>
+#include <set>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -9,6 +13,8 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <nlohmann/json.hpp>
 
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
@@ -28,6 +34,43 @@ struct ExpectedShader final {
   std::size_t push_constant_size;
   const char *source_path;
 };
+
+[[nodiscard]] nlohmann::json load_shader_manifest() {
+  const auto manifest_path = std::filesystem::path(NLRC_VKSPLAT_SHADER_GENERATED_DIR) / "shader_manifest.json";
+  std::ifstream input(manifest_path);
+  if (!input.is_open()) {
+    throw std::runtime_error("could not open generated shader manifest: " + manifest_path.string());
+  }
+  return nlohmann::json::parse(input);
+}
+
+[[nodiscard]] std::string manifest_source_path(const nlohmann::json &module) {
+  const auto source = module.at("source").get<std::string>();
+  const auto language = module.at("language").get<std::string>();
+  if (language == "slang") {
+    return "slang/" + source;
+  }
+  if (language == "glsl") {
+    return "shader/" + source;
+  }
+  throw std::invalid_argument("unsupported shader manifest language: " + language);
+}
+
+[[nodiscard]] std::map<std::string, int> manifest_defines(const nlohmann::json &module) {
+  std::map<std::string, int> defines;
+  for (auto iter = module.at("defines").begin(); iter != module.at("defines").end(); ++iter) {
+    defines.emplace(iter.key(), iter.value().get<int>());
+  }
+  return defines;
+}
+
+[[nodiscard]] std::map<std::string, int> shader_defines(const gpu::ShaderInterface &shader) {
+  std::map<std::string, int> defines;
+  for (std::size_t index = 0; index < shader.source.defines.size(); ++index) {
+    defines.emplace(shader.source.defines[index].name, shader.source.defines[index].value);
+  }
+  return defines;
+}
 
 template <typename T>
 inline constexpr std::size_t kStorageBindingArraySize = std::tuple_size_v<std::remove_cv_t<std::remove_reference_t<T>>>;
@@ -168,6 +211,38 @@ TEST_CASE("Shader descriptor registry exposes ported logical shader metadata", "
     REQUIRE(by_id.push_constant_size == expected_shader.push_constant_size);
     REQUIRE(std::string_view(by_id.source.path) == expected_shader.source_path);
     REQUIRE_FALSE(std::string_view(by_id.dispatch.formula).empty());
+  }
+}
+
+TEST_CASE("Shader descriptor registry matches compiled shader manifest", "[host]") {
+  const auto manifest = load_shader_manifest();
+  const auto &modules = manifest.at("modules");
+  std::set<std::string> manifest_shader_names;
+
+  std::size_t checked_modules = 0;
+  for (const auto &module : modules) {
+    const auto name = module.at("name").get<std::string>();
+    if (name == "smoke") {
+      continue;
+    }
+
+    INFO("shader manifest module: " << name);
+    REQUIRE(manifest_shader_names.insert(name).second);
+
+    const auto &shader = gpu::shader_interface(name);
+    REQUIRE(std::string(shader.logical_name) == name);
+    REQUIRE(std::string(shader.source.language) == module.at("language").get<std::string>());
+    REQUIRE(std::string(shader.source.path) == manifest_source_path(module));
+    REQUIRE(shader_defines(shader) == manifest_defines(module));
+    ++checked_modules;
+  }
+
+  REQUIRE(checked_modules == gpu::shader_interfaces().size());
+  const auto registry_shaders = gpu::shader_interfaces();
+  for (std::size_t index = 0; index < registry_shaders.size(); ++index) {
+    const auto &shader = registry_shaders[index];
+    INFO("shader registry entry: " << shader.logical_name);
+    REQUIRE(manifest_shader_names.count(shader.logical_name) == 1U);
   }
 }
 

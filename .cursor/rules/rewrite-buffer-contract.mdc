@@ -44,6 +44,8 @@ pipeline.bind_storage_buffers({scales_opacs, xyz_ws});
 pipeline.bind_storage_buffers({xyz_ws, sh_coeffs, rotations, scales_opacs});
 ```
 
+When adding a kernel: add or update the `shader_descriptors.hpp` `ShaderInterface` entry keyed by the `compile_shaders.py` `ShaderJob` name, add or update the typed `*_storage_bindings()` helper, add fixture routing in `shader_fixture_mapping.cpp` or a composite fixture contract, then run descriptor/catalog tests before relying on GPU-only tests.
+
 ## Layout Contract
 
 | Ref pattern to avoid | Rewrite pattern |
