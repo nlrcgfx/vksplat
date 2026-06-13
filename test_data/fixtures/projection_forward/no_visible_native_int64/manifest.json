@@ -88,6 +88,7 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": false,
   "vkbd_source": "synthetic",
+  "binding_contract": "shaders/projection_forward",
   "uniforms": {
     "image_height": 32,
     "image_width": 32,

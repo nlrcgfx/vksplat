@@ -33,5 +33,6 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": true,
   "vkbd_source": "synthetic",
+  "binding_contract": "shaders/where",
   "notes": "Synthetic utility fixture for where shader no-true-mask testing"
 }

@@ -33,5 +33,6 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": true,
   "vkbd_source": "synthetic",
+  "binding_contract": "shaders/cumsum_single_pass",
   "notes": "Synthetic utility fixture for isolated cumsum_single_pass shader testing"
 }

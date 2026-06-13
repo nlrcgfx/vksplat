@@ -33,5 +33,6 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": true,
   "vkbd_source": "synthetic",
+  "binding_contract": "fixture_contracts/cumsum_multi_block",
   "notes": "Synthetic utility fixture for multi-block cumsum shader testing"
 }

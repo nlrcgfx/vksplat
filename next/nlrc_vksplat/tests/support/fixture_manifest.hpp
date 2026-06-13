@@ -31,6 +31,7 @@ struct FixtureManifest {
   std::string ref_baseline_tag;
   std::string stage_name;
   std::string subgraph;
+  std::string binding_contract;
   std::vector<std::string> bindings;
   std::map<std::string, BufferSpec> buffers;
   std::string cmake_preset;

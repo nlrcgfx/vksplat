@@ -27,5 +27,6 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": true,
   "vkbd_source": "synthetic",
+  "binding_contract": "fixture_contracts/radix_sort_output",
   "notes": "Synthetic radix sort golden for multi-partition sorting"
 }

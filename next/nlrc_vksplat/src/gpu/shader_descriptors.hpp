@@ -108,16 +108,11 @@ struct ShaderInterface final {
   ShaderSourceDescriptor source{};
 };
 
-struct FixtureBindingContract final {
-  const char *name{};
-  Span<const char *const> bindings;
-};
-
 // Kernel port checklist:
 // 1. Add the logical shader registry entry and binding table here.
 // 2. Add a checked *_storage_bindings() helper in shader_binding_resolver.hpp.
-// 3. Route fixture/golden manifests through shader_fixture_mapping.cpp or an explicit untracked path.
-// 4. Keep test_data/shader_binding_contracts.json and descriptor/generator checks green.
+// 3. Update test_data/shader_binding_contracts.json fixture contracts/routes, then regenerate fixtures.
+// 4. Keep the shader binding contract export check and descriptor/generator checks green.
 
 namespace detail {
 
@@ -442,67 +437,6 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
 }};
 // clang-format on
 
-// clang-format off
-inline constexpr std::array<const char *, 6> kRadixSortPipelineFixtureBindings = {{
-    "sorting_keys_1",
-    "sorting_gauss_idx_1",
-    "sorting_keys_2",
-    "sorting_gauss_idx_2",
-    "_sorting_histogram",
-    "_sorting_histogram_cumsum",
-}};
-
-inline constexpr std::array<const char *, 3> kCumsumMultiBlockFixtureBindings = {{
-    "input",
-    "output",
-    "block_sums",
-}};
-
-inline constexpr std::array<const char *, 4> kCumsumTwoLevelFixtureBindings = {{
-    "input",
-    "output",
-    "block_sums",
-    "block_sums2",
-}};
-
-inline constexpr std::array<const char *, 1> kOutputFixtureBindings = {{
-    "output",
-}};
-
-inline constexpr std::array<const char *, 1> kWhereOutputFixtureBindings = {{
-    "out_indices",
-}};
-
-inline constexpr std::array<const char *, 2> kGenerateKeysOutputFixtureBindings = {{
-    "unsorted_keys",
-    "unsorted_gauss_idx",
-}};
-
-inline constexpr std::array<const char *, 1> kComputeTileRangesOutputFixtureBindings = {{
-    "tile_ranges",
-}};
-
-inline constexpr std::array<const char *, 2> kRadixSortOutputFixtureBindings = {{
-    "sorted_keys",
-    "sorted_gauss_idx",
-}};
-
-inline constexpr std::array<const char *, 0> kNoExactGoldenOutputFixtureBindings = {};
-
-inline constexpr std::array<FixtureBindingContract, 10> kFixtureBindingContracts = {{
-    {"radix_sort_pipeline", make_span(kRadixSortPipelineFixtureBindings)},
-    {"cumsum_multi_block", make_span(kCumsumMultiBlockFixtureBindings)},
-    {"cumsum_multi_block_two_level", make_span(kCumsumTwoLevelFixtureBindings)},
-    {"cumsum_output", make_span(kOutputFixtureBindings)},
-    {"sum_output", make_span(kOutputFixtureBindings)},
-    {"where_output", make_span(kWhereOutputFixtureBindings)},
-    {"generate_keys_output", make_span(kGenerateKeysOutputFixtureBindings)},
-    {"compute_tile_ranges_output", make_span(kComputeTileRangesOutputFixtureBindings)},
-    {"radix_sort_output", make_span(kRadixSortOutputFixtureBindings)},
-    {"no_exact_golden_outputs", make_span(kNoExactGoldenOutputFixtureBindings)},
-}};
-// clang-format on
-
 } // namespace detail
 
 [[nodiscard]] constexpr Span<const ShaderBindingDescriptor> shader_binding_descriptors(ShaderId id) noexcept {
@@ -556,33 +490,11 @@ inline constexpr std::array<FixtureBindingContract, 10> kFixtureBindingContracts
   throw std::invalid_argument("Unknown shader interface: " + std::string(logical_name));
 }
 
-[[nodiscard]] inline Span<const FixtureBindingContract> fixture_binding_contracts() noexcept {
-  return make_span(detail::kFixtureBindingContracts);
-}
-
-[[nodiscard]] inline const FixtureBindingContract &fixture_binding_contract(std::string_view name) {
-  for (const auto &contract : detail::kFixtureBindingContracts) {
-    if (contract.name == name) {
-      return contract;
-    }
-  }
-  throw std::invalid_argument("Unknown fixture binding contract: " + std::string(name));
-}
-
 [[nodiscard]] inline std::vector<std::string> binding_names(const ShaderInterface &shader) {
   std::vector<std::string> names;
   names.reserve(shader.bindings.size());
   for (std::size_t index = 0; index < shader.bindings.size(); ++index) {
     names.emplace_back(shader.bindings[index].name);
-  }
-  return names;
-}
-
-[[nodiscard]] inline std::vector<std::string> binding_names(const FixtureBindingContract &contract) {
-  std::vector<std::string> names;
-  names.reserve(contract.bindings.size());
-  for (std::size_t index = 0; index < contract.bindings.size(); ++index) {
-    names.emplace_back(contract.bindings[index]);
   }
   return names;
 }

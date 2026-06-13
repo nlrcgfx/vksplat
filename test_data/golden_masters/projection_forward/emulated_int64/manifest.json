@@ -11,6 +11,7 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": false,
   "vkbd_source": "synthetic",
+  "binding_contract": "fixture_contracts/no_exact_golden_outputs",
   "uniforms": {
     "image_height": 32,
     "image_width": 32,

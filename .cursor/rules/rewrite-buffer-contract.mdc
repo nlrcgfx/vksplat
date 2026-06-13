@@ -14,6 +14,7 @@ Parity contract for rewrite dispatches and golden tests. Read before porting eac
 |------|-------|
 | Buffer field names and shapes | `ref/vksplat/src/buffer.h`, especially `VulkanGSPipelineBuffers` |
 | Rewrite host binding registry | `next/nlrc_vksplat/src/gpu/shader_descriptors.hpp` |
+| Shared binding/fixture routing artifact | `test_data/shader_binding_contracts.json` |
 | Reference per-kernel binding tables | `ref/docs/shader-pipeline.md`, subgraph sections and shader index |
 | Ref dispatch wiring | `ref/vksplat/src/gs_renderer.cpp`, `gs_trainer.cpp`, vectors passed to `executeCompute` |
 | Rewrite config-dependent types | `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` |
@@ -27,6 +28,8 @@ Rewrite API terminology: bind `StorageBindingList`, then dispatch with `Dispatch
 
 - `buffers[i]` maps to descriptor binding `i` with `VK_DESCRIPTOR_TYPE_STORAGE_BUFFER`.
 - Rewrite host vector order must come from the logical shader entry in `shader_descriptors.hpp`.
+- The JSON `shaders` section is exported/checked from the C++ registry; do not hand-edit it independently.
+- JSON `fixture_contracts`, `routes`, and `untracked_routes` are the single source for generated fixture/golden `bindings[]` and C++ fixture mapping.
 - When adding or changing a registry entry, verify it against the Bind column in `shader-pipeline.md` for that kernel.
 - Do not sort bindings alphabetically.
 - Do not infer binding order from `VulkanGSPipelineBuffers` member order.
@@ -44,7 +47,7 @@ pipeline.bind_storage_buffers({scales_opacs, xyz_ws});
 pipeline.bind_storage_buffers({xyz_ws, sh_coeffs, rotations, scales_opacs});
 ```
 
-When adding a kernel: add or update the `shader_descriptors.hpp` `ShaderInterface` entry keyed by the `compile_shaders.py` `ShaderJob` name, add or update the typed `*_storage_bindings()` helper, add fixture routing in `shader_fixture_mapping.cpp` or a composite fixture contract, then run descriptor/catalog tests before relying on GPU-only tests.
+When adding a kernel: add or update the `shader_descriptors.hpp` `ShaderInterface` entry keyed by the `compile_shaders.py` `ShaderJob` name, add or update the typed `*_storage_bindings()` helper, add fixture/golden routes or composite fixture contracts in `test_data/shader_binding_contracts.json`, run the binding contract export check, then run descriptor/catalog tests before relying on GPU-only tests.
 
 ## Layout Contract
 
@@ -62,7 +65,7 @@ When adding a kernel: add or update the `shader_descriptors.hpp` `ShaderInterfac
 1. Add or verify the logical shader entry in `shader_descriptors.hpp` against `shader-pipeline.md`.
 2. Host binding list length matches the registry binding count.
 3. Push constant size matches shader and wrapper constructor size.
-4. Fixture/golden `manifest.json` includes `bindings[]` in descriptor order.
+4. Fixture/golden `manifest.json` includes generated `binding_contract` and `bindings[]` in descriptor order.
 5. Fixture dtypes and shapes match `BufferSpec` before changing shader logic.
 
 ## Tests

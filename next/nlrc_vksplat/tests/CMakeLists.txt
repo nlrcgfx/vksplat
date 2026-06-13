@@ -6,6 +6,9 @@ set(NLRC_VKSPLAT_TEST_DATA_DIR "${PROJECT_SOURCE_DIR}/../../test_data" CACHE PAT
     "Root directory for fixture and golden test data")
 
 set(NLRC_VKSPLAT_FIXTURE_GENERATOR "${NLRC_VKSPLAT_TEST_DATA_DIR}/generate_fixtures.py")
+set(NLRC_VKSPLAT_BINDING_CONTRACTS "${NLRC_VKSPLAT_TEST_DATA_DIR}/shader_binding_contracts.json")
+set(NLRC_VKSPLAT_BINDING_CONTRACT_EXPORTER
+    "${PROJECT_SOURCE_DIR}/scripts/export_shader_binding_contracts.py")
 
 set(NLRC_VKSPLAT_DEP_ARCHIVE_DIR "${PROJECT_SOURCE_DIR}/contrib" CACHE PATH
     "Directory containing optional local dependency archives")
@@ -78,6 +81,15 @@ target_compile_definitions(nlrc_vksplat_test_support PUBLIC
   NLRC_VKSPLAT_GPU_TEST_POLICY=${_NLRC_VKSPLAT_GPU_POLICY_VALUE}
 )
 
+add_executable(nlrc_vksplat_shader_binding_registry_export
+  export_shader_binding_registry.cpp
+)
+
+target_link_libraries(nlrc_vksplat_shader_binding_registry_export PRIVATE
+  nlrc_vksplat_core
+  nlohmann_json::nlohmann_json
+)
+
 add_executable(nlrc_vksplat_tests)
 
 target_sources(nlrc_vksplat_tests
@@ -123,5 +135,18 @@ add_test(
   COMMAND ${Python_EXECUTABLE} ${NLRC_VKSPLAT_FIXTURE_GENERATOR} --check
 )
 set_tests_properties(nlrc_vksplat_fixture_generation_check PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+)
+
+add_test(
+  NAME nlrc_vksplat_shader_binding_contracts_check
+  COMMAND
+    ${Python_EXECUTABLE}
+    ${NLRC_VKSPLAT_BINDING_CONTRACT_EXPORTER}
+    --check
+    --binding-contracts ${NLRC_VKSPLAT_BINDING_CONTRACTS}
+    --registry-exporter $<TARGET_FILE:nlrc_vksplat_shader_binding_registry_export>
+)
+set_tests_properties(nlrc_vksplat_shader_binding_contracts_check PROPERTIES
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )

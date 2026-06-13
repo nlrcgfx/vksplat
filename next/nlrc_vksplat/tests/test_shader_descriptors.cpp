@@ -326,7 +326,7 @@ TEST_CASE("Shader descriptors preserve dispatch binding order", "[host]") {
 TEST_CASE("Shader descriptor binding contract export matches descriptor registry", "[host]") {
   const auto contracts = load_shader_binding_contracts();
 
-  REQUIRE(contracts.at("schema").get<int>() == 1);
+  REQUIRE(contracts.at("schema").get<int>() == 2);
 
   const auto &shaders = contracts.at("shaders");
   REQUIRE(shaders.size() == gpu::shader_interfaces().size());
@@ -339,17 +339,15 @@ TEST_CASE("Shader descriptor binding contract export matches descriptor registry
   }
 
   const auto &fixture_contracts = contracts.at("fixture_contracts");
-  REQUIRE(fixture_contracts.size() == gpu::fixture_binding_contracts().size());
-  const auto registry_contracts = gpu::fixture_binding_contracts();
-  for (std::size_t index = 0; index < registry_contracts.size(); ++index) {
-    const auto &contract = registry_contracts[index];
-    INFO("fixture contract: " << contract.name);
-    REQUIRE(fixture_contracts.contains(contract.name));
-    REQUIRE(json_string_array(fixture_contracts.at(contract.name)) == gpu::binding_names(contract));
-  }
+  REQUIRE(fixture_contracts.is_object());
+  REQUIRE_FALSE(fixture_contracts.empty());
+  REQUIRE(contracts.at("routes").is_array());
+  REQUIRE_FALSE(contracts.at("routes").empty());
+  REQUIRE(contracts.at("untracked_routes").is_array());
+  REQUIRE_FALSE(contracts.at("untracked_routes").empty());
 }
 
-TEST_CASE("Fixture catalog and golden bindings match shader descriptor registry", "[host]") {
+TEST_CASE("Fixture catalog and golden bindings match JSON shader binding routes", "[host]") {
   struct Root final {
     const char *name;
     std::filesystem::path path;
@@ -370,23 +368,16 @@ TEST_CASE("Fixture catalog and golden bindings match shader descriptor registry"
       INFO("manifest: " << manifest_path.string());
       INFO("stage: " << manifest.stage_name);
 
-      if (const auto *shader = tests::shader_interface_for_fixture(manifest, root.side); shader != nullptr) {
-        REQUIRE(manifest.bindings == gpu::binding_names(*shader));
-        ++checked_manifests;
+      const auto resolution = tests::fixture_binding_resolution(manifest, root.side);
+      if (resolution.untracked) {
+        REQUIRE(manifest.binding_contract.empty());
         continue;
       }
 
-      if (const auto *contract = tests::fixture_contract_for_manifest(manifest, root.side); contract != nullptr) {
-        REQUIRE(manifest.bindings == gpu::binding_names(*contract));
-        ++checked_manifests;
-        continue;
-      }
-
-      if (tests::fixture_is_intentionally_untracked(manifest)) {
-        continue;
-      }
-
-      FAIL("Manifest has no shader descriptor or fixture binding contract");
+      REQUIRE_FALSE(resolution.contract.empty());
+      REQUIRE(manifest.binding_contract == resolution.contract);
+      REQUIRE(manifest.bindings == resolution.bindings);
+      ++checked_manifests;
     }
   }
 

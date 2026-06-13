@@ -85,6 +85,7 @@ FixtureManifest load_fixture_manifest(const fs::path &manifest_path) {
   manifest.ref_baseline_tag = json.at("ref_baseline_tag").get<std::string>();
   manifest.stage_name = json.at("stage_name").get<std::string>();
   manifest.subgraph = json.at("subgraph").get<std::string>();
+  manifest.binding_contract = json.value("binding_contract", "");
   manifest.bindings = json.at("bindings").get<std::vector<std::string>>();
   manifest.cmake_preset = json.at("cmake_preset").get<std::string>();
   manifest.emulate_int64 = json.at("emulate_int64").get<int>();

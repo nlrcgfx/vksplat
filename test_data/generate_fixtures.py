@@ -95,92 +95,144 @@ class FixtureCase:
     uniforms: dict[str, int | float | list[float]] | None = None
 
 
-BindingContracts = dict[str, dict[str, tuple[str, ...]]]
+VALID_ROUTE_SIDES = ("fixture", "golden", "both")
+
+
+@dataclass(frozen=True)
+class BindingRoute:
+    subgraph: str
+    stage_name: str | None
+    stage_name_prefix: str | None
+    side: str
+    contract: str | None = None
+
+
+@dataclass(frozen=True)
+class BindingRouteResolution:
+    contract: str | None
+    bindings: tuple[str, ...]
+    untracked: bool = False
+
+
+@dataclass(frozen=True)
+class BindingContracts:
+    shaders: dict[str, tuple[str, ...]]
+    fixture_contracts: dict[str, tuple[str, ...]]
+    routes: tuple[BindingRoute, ...]
+    untracked_routes: tuple[BindingRoute, ...]
 
 
 def load_binding_contracts(path: Path = DEFAULT_BINDING_CONTRACTS) -> BindingContracts:
     raw = json.loads(path.read_text(encoding="utf-8"))
-    if raw.get("schema") != 1:
+    if raw.get("schema") != 2:
         raise ValueError(f"{path}: unsupported shader binding contract schema")
 
-    contracts: BindingContracts = {"shaders": {}, "fixture_contracts": {}}
-    for group in contracts:
+    def parse_contract_group(group: str) -> dict[str, tuple[str, ...]]:
         source = raw.get(group)
         if not isinstance(source, dict):
             raise ValueError(f"{path}: missing {group} binding contracts")
+        contracts: dict[str, tuple[str, ...]] = {}
         for name, bindings in source.items():
             if not isinstance(name, str) or not isinstance(bindings, list) or not all(
                 isinstance(binding, str) for binding in bindings
             ):
                 raise ValueError(f"{path}: invalid {group} contract for {name!r}")
-            contracts[group][name] = tuple(bindings)
+            contracts[name] = tuple(bindings)
+        return contracts
+
+    def parse_route(value: object, *, require_contract: bool) -> BindingRoute:
+        if not isinstance(value, dict):
+            raise ValueError(f"{path}: route entries must be objects")
+        subgraph = value.get("subgraph")
+        stage_name = value.get("stage_name")
+        stage_name_prefix = value.get("stage_name_prefix")
+        side = value.get("side", "both")
+        contract = value.get("contract")
+
+        if not isinstance(subgraph, str) or not subgraph:
+            raise ValueError(f"{path}: route is missing non-empty subgraph")
+        has_exact = isinstance(stage_name, str) and bool(stage_name)
+        has_prefix = isinstance(stage_name_prefix, str) and bool(stage_name_prefix)
+        if has_exact == has_prefix:
+            raise ValueError(f"{path}: route for {subgraph!r} must set exactly one stage matcher")
+        if side not in VALID_ROUTE_SIDES:
+            raise ValueError(f"{path}: route for {subgraph!r} has invalid side {side!r}")
+        if require_contract:
+            if not isinstance(contract, str) or not contract:
+                raise ValueError(f"{path}: tracked route for {subgraph!r} is missing contract")
+        elif contract is not None:
+            raise ValueError(f"{path}: untracked route for {subgraph!r} must not set contract")
+
+        return BindingRoute(
+            subgraph=subgraph,
+            stage_name=stage_name if has_exact else None,
+            stage_name_prefix=stage_name_prefix if has_prefix else None,
+            side=side,
+            contract=contract if require_contract else None,
+        )
+
+    shaders = parse_contract_group("shaders")
+    fixture_contracts = parse_contract_group("fixture_contracts")
+    routes_raw = raw.get("routes")
+    untracked_routes_raw = raw.get("untracked_routes")
+    if not isinstance(routes_raw, list):
+        raise ValueError(f"{path}: missing routes array")
+    if not isinstance(untracked_routes_raw, list):
+        raise ValueError(f"{path}: missing untracked_routes array")
+
+    contracts = BindingContracts(
+        shaders=shaders,
+        fixture_contracts=fixture_contracts,
+        routes=tuple(parse_route(route, require_contract=True) for route in routes_raw),
+        untracked_routes=tuple(parse_route(route, require_contract=False) for route in untracked_routes_raw),
+    )
+    for route in contracts.routes:
+        assert route.contract is not None
+        contract_binding_names(contracts, route.contract)
     return contracts
 
 
-def binding_contract_names(contracts: BindingContracts, group: str, name: str) -> tuple[str, ...]:
+def contract_binding_names(contracts: BindingContracts, contract_ref: str) -> tuple[str, ...]:
     try:
-        return contracts[group][name]
+        group, name = contract_ref.split("/", 1)
+    except ValueError as exc:
+        raise ValueError(f"invalid binding contract reference: {contract_ref}") from exc
+    if group == "shaders":
+        source = contracts.shaders
+    elif group == "fixture_contracts":
+        source = contracts.fixture_contracts
+    else:
+        raise ValueError(f"invalid binding contract group in reference: {contract_ref}")
+    try:
+        return source[name]
     except KeyError as exc:
-        raise ValueError(f"missing {group} binding contract: {name}") from exc
+        raise ValueError(f"missing binding contract reference: {contract_ref}") from exc
 
 
-def fixture_binding_route(case: FixtureCase) -> tuple[str, str] | None:
-    if case.subgraph == "harness":
-        return None
-    if case.subgraph == "projection" and case.stage_name.startswith("projection_forward_"):
-        return ("shaders", "projection_forward")
-    if case.subgraph == "generate_keys" and case.stage_name.startswith("generate_keys_"):
-        return ("shaders", "generate_keys")
-    if case.subgraph == "compute_tile_ranges" and case.stage_name.startswith("compute_tile_ranges"):
-        return ("shaders", "compute_tile_ranges")
-    if case.subgraph == "rasterize_forward" and case.stage_name.startswith("rasterize_forward_"):
-        return ("shaders", "rasterize_forward")
-    if case.subgraph == "radix_sort" and case.stage_name.startswith("radix_sort_"):
-        return ("fixture_contracts", "radix_sort_pipeline")
-    if case.subgraph == "utility":
-        if case.stage_name in ("cumsum_multi_block", "cumsum_multi_block_two_level"):
-            return ("fixture_contracts", case.stage_name)
-        if case.stage_name == "sum" or case.stage_name.startswith("sum_"):
-            return ("shaders", "sum")
-        if case.stage_name == "where" or case.stage_name.startswith("where_"):
-            return ("shaders", "where")
-        if case.stage_name == "cumsum_single_pass" or case.stage_name.startswith("cumsum_single_pass_"):
-            return ("shaders", "cumsum_single_pass")
-    raise ValueError(f"{case.stage_name}: no fixture binding contract route")
+def route_matches(route: BindingRoute, case: FixtureCase, side: str) -> bool:
+    if route.side not in ("both", side):
+        return False
+    if route.subgraph != case.subgraph:
+        return False
+    if route.stage_name is not None:
+        return case.stage_name == route.stage_name
+    if route.stage_name_prefix is not None:
+        return case.stage_name.startswith(route.stage_name_prefix)
+    raise AssertionError("route has no matcher")
 
 
-def golden_binding_route(case: FixtureCase) -> tuple[str, str] | None:
-    if case.subgraph == "harness":
-        return None
-    if case.subgraph == "projection" and case.stage_name.startswith("projection_forward_"):
-        return ("fixture_contracts", "no_exact_golden_outputs")
-    if case.subgraph == "generate_keys" and case.stage_name.startswith("generate_keys_"):
-        return ("fixture_contracts", "generate_keys_output")
-    if case.subgraph == "compute_tile_ranges" and case.stage_name.startswith("compute_tile_ranges"):
-        return ("fixture_contracts", "compute_tile_ranges_output")
-    if case.subgraph == "rasterize_forward" and case.stage_name.startswith("rasterize_forward_"):
-        return ("fixture_contracts", "no_exact_golden_outputs")
-    if case.subgraph == "radix_sort" and case.stage_name.startswith("radix_sort_"):
-        return ("fixture_contracts", "radix_sort_output")
-    if case.subgraph == "utility":
-        if case.stage_name == "sum" or case.stage_name.startswith("sum_"):
-            return ("fixture_contracts", "sum_output")
-        if case.stage_name == "where" or case.stage_name.startswith("where_"):
-            return ("fixture_contracts", "where_output")
-        if case.stage_name.startswith("cumsum_"):
-            return ("fixture_contracts", "cumsum_output")
-    raise ValueError(f"{case.stage_name}: no golden binding contract route")
-
-
-def routed_binding_names(
-    case: FixtureCase,
-    contracts: BindingContracts,
-    route: tuple[str, str] | None,
-) -> tuple[str, ...]:
-    if route is None:
-        return ()
-    group, name = route
-    return binding_contract_names(contracts, group, name)
+def resolve_binding_route(case: FixtureCase, contracts: BindingContracts, side: str) -> BindingRouteResolution:
+    for route in contracts.routes:
+        if route_matches(route, case, side):
+            assert route.contract is not None
+            return BindingRouteResolution(
+                contract=route.contract,
+                bindings=contract_binding_names(contracts, route.contract),
+            )
+    for route in contracts.untracked_routes:
+        if route_matches(route, case, side):
+            return BindingRouteResolution(contract=None, bindings=(), untracked=True)
+    raise ValueError(f"{case.stage_name}: no {side} binding contract route")
 
 
 def element_count(shape: Iterable[int]) -> int:
@@ -897,9 +949,14 @@ def validate_buffer(buffer: BufferData) -> None:
         raise ValueError(f"{buffer.name}: shape expects {expected_values} values, got {len(buffer.values)}")
 
 
-def manifest_for(case: FixtureCase, buffers: tuple[BufferData, ...], bindings: tuple[str, ...], notes: str) -> dict:
+def manifest_for(
+    case: FixtureCase,
+    buffers: tuple[BufferData, ...],
+    route: BindingRouteResolution,
+    notes: str,
+) -> dict:
     buffer_names = {buffer.name for buffer in buffers}
-    missing_bindings = [binding for binding in bindings if binding not in buffer_names]
+    missing_bindings = [binding for binding in route.bindings if binding not in buffer_names]
     if missing_bindings:
         raise ValueError(f"{case.stage_name}: bindings missing buffers: {missing_bindings}")
 
@@ -907,7 +964,7 @@ def manifest_for(case: FixtureCase, buffers: tuple[BufferData, ...], bindings: t
         "ref_baseline_tag": REF_BASELINE_TAG,
         "stage_name": case.stage_name,
         "subgraph": case.subgraph,
-        "bindings": list(bindings),
+        "bindings": list(route.bindings),
         "buffers": {buffer.name: buffer.file_name for buffer in buffers},
         "shapes": {buffer.name: list(buffer.shape) for buffer in buffers},
         "dtypes": {buffer.name: buffer.dtype for buffer in buffers},
@@ -917,6 +974,8 @@ def manifest_for(case: FixtureCase, buffers: tuple[BufferData, ...], bindings: t
         "profile_agnostic": case.profile_agnostic,
         "vkbd_source": "synthetic",
     }
+    if route.contract is not None:
+        manifest["binding_contract"] = route.contract
 
     if case.uniforms is not None:
         manifest["uniforms"] = case.uniforms
@@ -945,21 +1004,21 @@ def write_case(root: Path, case: FixtureCase, contracts: BindingContracts) -> No
     fixture_dir.mkdir(parents=True, exist_ok=True)
     golden_dir.mkdir(parents=True, exist_ok=True)
 
-    fixture_bindings = routed_binding_names(case, contracts, fixture_binding_route(case))
-    golden_bindings = routed_binding_names(case, contracts, golden_binding_route(case))
+    fixture_route = resolve_binding_route(case, contracts, "fixture")
+    golden_route = resolve_binding_route(case, contracts, "golden")
 
     for buffer in case.fixture_buffers:
         write_binary(fixture_dir / buffer.file_name, buffer)
     write_manifest(
         fixture_dir / "manifest.json",
-        manifest_for(case, case.fixture_buffers, fixture_bindings, case.fixture_notes),
+        manifest_for(case, case.fixture_buffers, fixture_route, case.fixture_notes),
     )
 
     for buffer in case.golden_buffers:
         write_binary(golden_dir / buffer.file_name, buffer)
     write_manifest(
         golden_dir / "manifest.json",
-        manifest_for(case, case.golden_buffers, golden_bindings, case.golden_notes),
+        manifest_for(case, case.golden_buffers, golden_route, case.golden_notes),
     )
 
 

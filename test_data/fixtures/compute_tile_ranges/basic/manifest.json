@@ -27,6 +27,7 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": true,
   "vkbd_source": "synthetic",
+  "binding_contract": "shaders/compute_tile_ranges",
   "uniforms": {
     "image_height": 32,
     "image_width": 48,

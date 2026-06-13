@@ -45,6 +45,7 @@ Do not mark behavior covered unless it is asserted by CTest or a documented dedi
 | `ctest --preset windows-debug --output-on-failure` | Run discovered tests |
 | `test_data/generate_fixtures.py --check` | Verify checked-in generated fixture/golden files are reproducible |
 | `nlrc_vksplat_fixture_generation_check` | CTest wrapper around fixture-generation drift checks |
+| `nlrc_vksplat_shader_binding_contracts_check` | CTest wrapper around C++ registry -> JSON shader binding drift and JSON route validation |
 
 Options:
 
@@ -81,14 +82,15 @@ Per-dispatch workflow: load fixture, upload `StorageBuffer`, bind `StorageBindin
 
 1. Add or update the logical shader entry in `next/nlrc_vksplat/src/gpu/shader_descriptors.hpp`; this is the rewrite binding source of truth.
 2. Add or update the typed storage-binding resolver helper in `shader_binding_resolver.hpp`; helper field order must match the registry entry.
-3. Add fixture catalog routing in `tests/support/shader_fixture_mapping.cpp`, or add an explicit composite fixture contract for host-helper pipelines that are not one logical shader.
+3. Add fixture/golden routing in `test_data/shader_binding_contracts.json` using `shaders/<logical_name>`, `fixture_contracts/<name>`, or an explicit `untracked_routes` entry.
 4. Add or update synthetic fixture values in `test_data/generate_fixtures.py`, or document why a curated ref-derived fixture is maintained separately.
-5. Ensure fixture `manifest.json` `bindings[]` matches the registry entry or composite fixture contract, then regenerate checked-in fixture/golden manifests and `.bin` payloads with `generate_fixtures.py --write`.
-6. Verify fixture generation with `generate_fixtures.py --check`; CTest also runs this through `nlrc_vksplat_fixture_generation_check`.
-7. Add invariant Catch2 tests where applicable, and add golden parity tests loading `test_data/golden_masters/...`.
-8. Document fixture and golden meaning in `test_data/README.md`, including exact values for small synthetic buffers.
-9. Update `next/nlrc_vksplat/docs/testing-report.md` for new coverage, changed test behavior, or remaining gaps.
-10. Implement the stage in `next/nlrc_vksplat/` until tests pass, then integrate into the parent subgraph or training path.
+5. Run the binding contract export check so JSON `shaders` matches the C++ registry and route references are valid.
+6. Ensure fixture `manifest.json` `binding_contract` and `bindings[]` are generated from JSON routing, then regenerate checked-in fixture/golden manifests and `.bin` payloads with `generate_fixtures.py --write`.
+7. Verify fixture generation with `generate_fixtures.py --check`; CTest also runs this through `nlrc_vksplat_fixture_generation_check`.
+8. Add invariant Catch2 tests where applicable, and add golden parity tests loading `test_data/golden_masters/...`.
+9. Document fixture and golden meaning in `test_data/README.md`, including exact values for small synthetic buffers.
+10. Update `next/nlrc_vksplat/docs/testing-report.md` for new coverage, changed test behavior, or remaining gaps.
+11. Implement the stage in `next/nlrc_vksplat/` until tests pass, then integrate into the parent subgraph or training path.
 
 ## test_data Layout
 
@@ -110,6 +112,7 @@ Groups: `harness`, `cumsum`, `sum`, `where`, `radix_sort`. Manifest `stage_name`
 Each `manifest.json` records:
 
 - `ref_baseline_tag`, `stage_name`, `subgraph`, `bindings`
+- optional `binding_contract` generated from `shader_binding_contracts.json`
 - `buffers`, `shapes`, `dtypes`
 - `cmake_preset`, `emulate_int64`, `emulate_f32_atomic`
 - `notes`

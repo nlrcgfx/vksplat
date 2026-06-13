@@ -51,5 +51,6 @@
   "emulate_f32_atomic": 0,
   "profile_agnostic": true,
   "vkbd_source": "synthetic",
+  "binding_contract": "fixture_contracts/radix_sort_pipeline",
   "notes": "Synthetic radix sort fixture for multi-partition sorting"
 }

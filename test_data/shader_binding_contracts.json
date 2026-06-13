@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "shaders": {
     "cumsum_single_pass": [
       "input",
@@ -124,5 +124,146 @@
       "sorted_gauss_idx"
     ],
     "no_exact_golden_outputs": []
-  }
+  },
+  "routes": [
+    {
+      "subgraph": "projection",
+      "stage_name_prefix": "projection_forward_",
+      "side": "fixture",
+      "contract": "shaders/projection_forward"
+    },
+    {
+      "subgraph": "generate_keys",
+      "stage_name_prefix": "generate_keys_",
+      "side": "fixture",
+      "contract": "shaders/generate_keys"
+    },
+    {
+      "subgraph": "compute_tile_ranges",
+      "stage_name_prefix": "compute_tile_ranges",
+      "side": "fixture",
+      "contract": "shaders/compute_tile_ranges"
+    },
+    {
+      "subgraph": "rasterize_forward",
+      "stage_name_prefix": "rasterize_forward_",
+      "side": "fixture",
+      "contract": "shaders/rasterize_forward"
+    },
+    {
+      "subgraph": "radix_sort",
+      "stage_name_prefix": "radix_sort_",
+      "side": "fixture",
+      "contract": "fixture_contracts/radix_sort_pipeline"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name": "cumsum_multi_block",
+      "side": "fixture",
+      "contract": "fixture_contracts/cumsum_multi_block"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name": "cumsum_multi_block_two_level",
+      "side": "fixture",
+      "contract": "fixture_contracts/cumsum_multi_block_two_level"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name_prefix": "cumsum_single_pass",
+      "side": "fixture",
+      "contract": "shaders/cumsum_single_pass"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name": "sum",
+      "side": "fixture",
+      "contract": "shaders/sum"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name_prefix": "sum_",
+      "side": "fixture",
+      "contract": "shaders/sum"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name": "where",
+      "side": "fixture",
+      "contract": "shaders/where"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name_prefix": "where_",
+      "side": "fixture",
+      "contract": "shaders/where"
+    },
+    {
+      "subgraph": "projection",
+      "stage_name_prefix": "projection_forward_",
+      "side": "golden",
+      "contract": "fixture_contracts/no_exact_golden_outputs"
+    },
+    {
+      "subgraph": "generate_keys",
+      "stage_name_prefix": "generate_keys_",
+      "side": "golden",
+      "contract": "fixture_contracts/generate_keys_output"
+    },
+    {
+      "subgraph": "compute_tile_ranges",
+      "stage_name_prefix": "compute_tile_ranges",
+      "side": "golden",
+      "contract": "fixture_contracts/compute_tile_ranges_output"
+    },
+    {
+      "subgraph": "rasterize_forward",
+      "stage_name_prefix": "rasterize_forward_",
+      "side": "golden",
+      "contract": "fixture_contracts/no_exact_golden_outputs"
+    },
+    {
+      "subgraph": "radix_sort",
+      "stage_name_prefix": "radix_sort_",
+      "side": "golden",
+      "contract": "fixture_contracts/radix_sort_output"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name_prefix": "cumsum_",
+      "side": "golden",
+      "contract": "fixture_contracts/cumsum_output"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name": "sum",
+      "side": "golden",
+      "contract": "fixture_contracts/sum_output"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name_prefix": "sum_",
+      "side": "golden",
+      "contract": "fixture_contracts/sum_output"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name": "where",
+      "side": "golden",
+      "contract": "fixture_contracts/where_output"
+    },
+    {
+      "subgraph": "utility",
+      "stage_name_prefix": "where_",
+      "side": "golden",
+      "contract": "fixture_contracts/where_output"
+    }
+  ],
+  "untracked_routes": [
+    {
+      "subgraph": "harness",
+      "stage_name": "harness_smoke",
+      "side": "both"
+    }
+  ]
 }
