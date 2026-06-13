@@ -31,6 +31,7 @@ struct ExpectedShader final {
   gpu::ShaderId id;
   const char *logical_name;
   std::uint32_t binding_count;
+  const char *push_constant_type;
   std::size_t push_constant_size;
   const char *source_path;
 };
@@ -187,31 +188,35 @@ TEST_CASE("Shader descriptor registry exposes ported logical shader metadata", "
   // clang-format off
   const std::array expected = {
       ExpectedShader{gpu::ShaderId::CumsumSinglePass, "cumsum_single_pass", gpu::kCumsumBindingCount,
-                     sizeof(gpu::ElementCountPushConstants), "slang/cumsum.slang"},
+                     "push_constants::ElementCount", sizeof(gpu::push_constants::ElementCount), "slang/cumsum.slang"},
       ExpectedShader{gpu::ShaderId::CumsumBlockScan, "cumsum_block_scan", gpu::kCumsumBindingCount,
-                     sizeof(gpu::ElementCountPushConstants), "slang/cumsum.slang"},
+                     "push_constants::ElementCount", sizeof(gpu::push_constants::ElementCount), "slang/cumsum.slang"},
       ExpectedShader{gpu::ShaderId::CumsumScanBlockSums, "cumsum_scan_block_sums", gpu::kCumsumBindingCount,
-                     sizeof(gpu::ElementCountPushConstants), "slang/cumsum.slang"},
+                     "push_constants::ElementCount", sizeof(gpu::push_constants::ElementCount), "slang/cumsum.slang"},
       ExpectedShader{gpu::ShaderId::CumsumAddBlockOffsets, "cumsum_add_block_offsets", gpu::kCumsumBindingCount,
-                     sizeof(gpu::ElementCountPushConstants), "slang/cumsum.slang"},
-      ExpectedShader{gpu::ShaderId::Sum, "sum", gpu::kSumBindingCount, sizeof(gpu::ElementCountPushConstants),
-                     "slang/sum.slang"},
-      ExpectedShader{gpu::ShaderId::Where, "where", gpu::kWhereBindingCount, sizeof(gpu::ElementCountPushConstants),
-                     "slang/where.slang"},
+                     "push_constants::ElementCount", sizeof(gpu::push_constants::ElementCount), "slang/cumsum.slang"},
+      ExpectedShader{gpu::ShaderId::Sum, "sum", gpu::kSumBindingCount, "push_constants::ElementCount",
+                     sizeof(gpu::push_constants::ElementCount), "slang/sum.slang"},
+      ExpectedShader{gpu::ShaderId::Where, "where", gpu::kWhereBindingCount, "push_constants::ElementCount",
+                     sizeof(gpu::push_constants::ElementCount), "slang/where.slang"},
       ExpectedShader{gpu::ShaderId::ProjectionForward, "projection_forward", gpu::kProjectionForwardBindingCount,
-                     sizeof(gpu::RendererUniforms), "slang/vertex_shader.slang"},
+                     "push_constants::Renderer", sizeof(gpu::push_constants::Renderer), "slang/vertex_shader.slang"},
       ExpectedShader{gpu::ShaderId::GenerateKeys, "generate_keys", gpu::kGenerateKeysBindingCount,
-                     sizeof(gpu::RendererUniforms), "slang/tile_shader.slang"},
+                     "push_constants::Renderer", sizeof(gpu::push_constants::Renderer), "slang/tile_shader.slang"},
       ExpectedShader{gpu::ShaderId::ComputeTileRanges, "compute_tile_ranges", gpu::kComputeTileRangesBindingCount,
-                     sizeof(gpu::RendererUniforms), "slang/tile_shader.slang"},
+                     "push_constants::Renderer", sizeof(gpu::push_constants::Renderer), "slang/tile_shader.slang"},
       ExpectedShader{gpu::ShaderId::RasterizeForward, "rasterize_forward", gpu::kRasterizeForwardBindingCount,
-                     sizeof(gpu::RendererUniforms), "slang/alphablend_shader.slang"},
+                     "push_constants::Renderer", sizeof(gpu::push_constants::Renderer),
+                     "slang/alphablend_shader.slang"},
       ExpectedShader{gpu::ShaderId::RadixSortUpsweep, "radix_sort_upsweep", gpu::kRadixSortUpsweepBindingCount,
-                     sizeof(gpu::RadixSortPushConstants), "shader/radix_sort/upsweep.comp"},
+                     "push_constants::RadixSort", sizeof(gpu::push_constants::RadixSort),
+                     "shader/radix_sort/upsweep.comp"},
       ExpectedShader{gpu::ShaderId::RadixSortSpine, "radix_sort_spine", gpu::kRadixSortSpineBindingCount,
-                     sizeof(gpu::RadixSortPushConstants), "shader/radix_sort/spine.comp"},
+                     "push_constants::RadixSort", sizeof(gpu::push_constants::RadixSort),
+                     "shader/radix_sort/spine.comp"},
       ExpectedShader{gpu::ShaderId::RadixSortDownsweep, "radix_sort_downsweep", gpu::kRadixSortDownsweepBindingCount,
-                     sizeof(gpu::RadixSortPushConstants), "shader/radix_sort/downsweep.comp"},
+                     "push_constants::RadixSort", sizeof(gpu::push_constants::RadixSort),
+                     "shader/radix_sort/downsweep.comp"},
   };
   // clang-format on
 
@@ -226,6 +231,7 @@ TEST_CASE("Shader descriptor registry exposes ported logical shader metadata", "
     REQUIRE(std::string_view(by_id.logical_name) == expected_shader.logical_name);
     REQUIRE(by_id.bindings.size() == expected_shader.binding_count);
     REQUIRE(by_id.binding_count == expected_shader.binding_count);
+    REQUIRE(std::string_view(by_id.push_constant_type) == expected_shader.push_constant_type);
     REQUIRE(by_id.push_constant_size == expected_shader.push_constant_size);
     REQUIRE(std::string_view(by_id.source.path) == expected_shader.source_path);
     REQUIRE_FALSE(std::string_view(by_id.dispatch.formula).empty());

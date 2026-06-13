@@ -26,7 +26,7 @@ constexpr std::uint32_t kDepthBits = 23;
 
 static_assert(VKSPLAT_SORTING_KEY_BITS == 32, "Update generate_keys tests when 64-bit keys are enabled.");
 
-[[nodiscard]] gpu::RendererUniforms make_uniforms(std::uint32_t num_splats) {
+[[nodiscard]] gpu::push_constants::Renderer make_uniforms(std::uint32_t num_splats) {
   return {
       kImageHeight,
       kImageWidth,

@@ -15,6 +15,7 @@
 #include "config.slang"
 
 import utils;
+import push_constants;
 
 #define _ENTRY_generate_keys 1
 #define _ENTRY_compute_tile_ranges 2
@@ -50,7 +51,7 @@ layout(binding=6) RWStructuredBuffer<int32_t> out_unsorted_gauss_idx;
 void main(
     uint3 dispatchThreadID : SV_DispatchThreadID,
     uint3 groupThreadID : SV_GroupThreadID,
-    uniform Uniforms uniforms
+    uniform PushConstants::Renderer uniforms
 ) {
     const uint image_height = uniforms.image_height;
     const uint image_width = uniforms.image_width;
@@ -173,7 +174,7 @@ layout(binding=1) RWStructuredBuffer<int32_t> out_tile_ranges;
 [numthreads(VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS, 1, 1)]
 void main(
     uint3 dispatchThreadID : SV_DispatchThreadID,
-    uniform Uniforms uniforms
+    uniform PushConstants::Renderer uniforms
 ) {
     int32_t globalIdx = dispatchThreadID.x;
 

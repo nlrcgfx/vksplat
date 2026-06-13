@@ -25,7 +25,7 @@ constexpr std::uint32_t kDepthBits = 23;
 
 static_assert(VKSPLAT_SORTING_KEY_BITS == 32, "Update compute_tile_ranges tests when 64-bit keys are enabled.");
 
-[[nodiscard]] gpu::RendererUniforms make_uniforms() {
+[[nodiscard]] gpu::push_constants::Renderer make_uniforms() {
   return {
       kImageHeight,
       kImageWidth,

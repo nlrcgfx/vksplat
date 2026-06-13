@@ -15,6 +15,7 @@
 #include "config.slang"
 
 import utils;
+import push_constants;
 
 #define SHARED_STRUCT 1
 
@@ -119,7 +120,7 @@ void main(
     uint3 dispatchThreadID : SV_DispatchThreadID,
     uint3 groupThreadID : SV_GroupThreadID,
     uint3 groupID : SV_GroupID,
-    uniform Uniforms uniforms
+    uniform PushConstants::Renderer uniforms
 ) {
     const uint32_t H = uniforms.image_height;
     const uint32_t W = uniforms.image_width;

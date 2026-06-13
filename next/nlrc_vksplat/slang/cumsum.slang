@@ -19,6 +19,8 @@
 
 #include "config.slang"
 
+import push_constants;
+
 static const uint BLOCK_SIZE_0 = VKSPLAT_CUMSUM_BLOCK_SIZE;
 #define BLOCK_SIZE min(BLOCK_SIZE_0, SUBGROUP_SIZE * SUBGROUP_SIZE * SUBGROUP_SIZE)
 
@@ -27,10 +29,6 @@ layout(binding = 1) RWStructuredBuffer<int32_t> g_output;
 layout(binding = 2) RWStructuredBuffer<int32_t> g_blockSums;
 
 groupshared int32_t s_data[BLOCK_SIZE_0];
-
-struct Uniforms {
-  uint32_t numElements;
-};
 
 int32_t subgroupScan(int32_t val, uint laneId) {
   [ForceUnroll]
@@ -44,7 +42,7 @@ int32_t subgroupScan(int32_t val, uint laneId) {
 }
 
 [numthreads(BLOCK_SIZE_0, 1, 1)]
-void blockScan(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, uniform Uniforms uniforms) {
+void blockScan(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, uniform PushConstants::ElementCount uniforms) {
   uint tid = localId.x;
   if (tid >= BLOCK_SIZE) {
     return;
@@ -86,7 +84,7 @@ void blockScan(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, unifo
 }
 
 [numthreads(BLOCK_SIZE_0, 1, 1)]
-void scanBlockSums(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, uniform Uniforms uniforms) {
+void scanBlockSums(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, uniform PushConstants::ElementCount uniforms) {
   uint tid = localId.x;
   if (tid >= BLOCK_SIZE) {
     return;
@@ -124,7 +122,7 @@ void scanBlockSums(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, u
 }
 
 [numthreads(BLOCK_SIZE_0, 1, 1)]
-void addBlockOffsets(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, uniform Uniforms uniforms) {
+void addBlockOffsets(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID, uniform PushConstants::ElementCount uniforms) {
   uint tid = localId.x;
   if (tid >= BLOCK_SIZE) {
     return;
@@ -139,7 +137,7 @@ void addBlockOffsets(uint3 groupId: SV_GroupID, uint3 localId: SV_GroupThreadID,
 }
 
 [numthreads(BLOCK_SIZE_0, 1, 1)]
-void singlePassPrefixSum(uint3 localId: SV_GroupThreadID, uint3 globalId: SV_DispatchThreadID, uniform Uniforms uniforms) {
+void singlePassPrefixSum(uint3 localId: SV_GroupThreadID, uint3 globalId: SV_DispatchThreadID, uniform PushConstants::ElementCount uniforms) {
   uint tid = localId.x;
   uint gid = globalId.x;
 

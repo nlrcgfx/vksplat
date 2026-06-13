@@ -1,6 +1,7 @@
 #include "config.slang"
 
 import utils;
+import push_constants;
 import spherical_harmonics;
 
 
@@ -146,7 +147,7 @@ void write_v_xyz_ws(uint32_t g_idx, float3 value) {
 [numthreads(SUBGROUP_SIZE, 1, 1)]
 void main(
     uint3 dispatchThreadID : SV_DispatchThreadID,
-    uniform Uniforms uniforms
+    uniform PushConstants::Renderer uniforms
 ) {
     const uint active_sh = uniforms.active_sh;
     const uint step = uniforms.step;

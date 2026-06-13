@@ -88,7 +88,7 @@ void dispatch_with_element_count(ComputePipeline &pipeline,
   require_storage_bindings(shader, bindings);
   pipeline.bind_storage_buffers(resolve_storage_bindings(shader, bindings));
 
-  const ElementCountPushConstants push_constants{require_uint32_count(element_count, "element_count")};
+  const push_constants::ElementCount push_constants{require_uint32_count(element_count, "element_count")};
   const auto push_constants_view = ByteView::from_object(push_constants);
   pipeline.dispatch(dispatch_groups_for(element_count, block_size), push_constants_view);
 }
@@ -97,7 +97,7 @@ void dispatch_radix_sort_pass(ComputePipeline &pipeline,
                               const ShaderInterface &shader,
                               Span<const NamedStorageBinding> bindings,
                               DispatchShape dispatch_shape,
-                              RadixSortPushConstants push_constants) {
+                              push_constants::RadixSort push_constants) {
   require_storage_bindings(shader, bindings);
   pipeline.bind_storage_buffers(resolve_storage_bindings(shader, bindings));
 
@@ -170,7 +170,7 @@ void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
   // clang-format on
 }
 
-[[nodiscard]] std::size_t require_tile_count(const RendererUniforms &uniforms) {
+[[nodiscard]] std::size_t require_tile_count(const push_constants::Renderer &uniforms) {
   if (uniforms.grid_width == 0U) {
     throw std::invalid_argument("grid_width must be > 0");
   }
@@ -185,7 +185,7 @@ void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
   return grid_height * grid_width;
 }
 
-[[nodiscard]] std::size_t require_pixel_count(const RendererUniforms &uniforms) {
+[[nodiscard]] std::size_t require_pixel_count(const push_constants::Renderer &uniforms) {
   if (uniforms.image_width == 0U) {
     throw std::invalid_argument("image_width must be > 0");
   }
@@ -244,7 +244,7 @@ void validate_rasterize_forward_bindings(const RasterizeForwardBindings &binding
   // clang-format on
 }
 
-void validate_forward_bindings(const ForwardBindings &bindings, const RendererUniforms &uniforms) {
+void validate_forward_bindings(const ForwardBindings &bindings, const push_constants::Renderer &uniforms) {
   require_binding(bindings.index_buffer_offset, "index_buffer_offset");
   require_binding(bindings.sorting_keys_1, "sorting_keys_1");
   require_binding(bindings.sorting_gauss_idx_1, "sorting_gauss_idx_1");
@@ -429,7 +429,7 @@ void execute_where(const HeadlessContext &context,
 
 void execute_projection_forward(const HeadlessContext &context,
                                 const ProjectionForwardBindings &bindings,
-                                const RendererUniforms &uniforms) {
+                                const push_constants::Renderer &uniforms) {
   const auto num_splats = static_cast<std::size_t>(require_uint32_count(uniforms.num_splats, "num_splats"));
   validate_projection_forward_bindings(bindings, num_splats);
 
@@ -446,7 +446,7 @@ void execute_projection_forward(const HeadlessContext &context,
 
 void execute_generate_keys(const HeadlessContext &context,
                            const GenerateKeysBindings &bindings,
-                           const RendererUniforms &uniforms,
+                           const push_constants::Renderer &uniforms,
                            std::size_t output_count) {
   const auto num_splats = static_cast<std::size_t>(require_uint32_count(uniforms.num_splats, "num_splats"));
   require_uint32_count(output_count, "output_count");
@@ -465,7 +465,7 @@ void execute_generate_keys(const HeadlessContext &context,
 
 void execute_compute_tile_ranges(const HeadlessContext &context,
                                  const ComputeTileRangesBindings &bindings,
-                                 const RendererUniforms &uniforms,
+                                 const push_constants::Renderer &uniforms,
                                  std::size_t num_indices) {
   const auto num_indices_u32 = require_uint32_count(num_indices, "num_indices");
   const auto num_tiles = require_tile_count(uniforms);
@@ -487,7 +487,7 @@ void execute_compute_tile_ranges(const HeadlessContext &context,
 
 void execute_rasterize_forward(const HeadlessContext &context,
                                const RasterizeForwardBindings &bindings,
-                               const RendererUniforms &uniforms,
+                               const push_constants::Renderer &uniforms,
                                std::size_t num_indices) {
   require_uint32_count(num_indices, "num_indices");
   const auto num_splats = static_cast<std::size_t>(require_uint32_count(uniforms.num_splats, "num_splats"));
@@ -547,7 +547,7 @@ auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindi
   const StorageBuffer *indices_out = bindings.indices_2;
 
   for (std::uint32_t pass = 0; pass < kRadixSortPasses; ++pass) {
-    const RadixSortPushConstants push_constants{pass, element_count_u32};
+    const push_constants::RadixSort push_constants{pass, element_count_u32};
 
     const auto upsweep_bindings = radix_sort_upsweep_storage_bindings(*keys_in, global_histogram, partition_histogram);
     dispatch_radix_sort_pass(upsweep_pipeline, upsweep_shader, make_span(upsweep_bindings), partition_dispatch_shape,
@@ -571,8 +571,9 @@ auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindi
   return {keys_in, indices_in};
 }
 
-auto execute_forward(const HeadlessContext &context, const ForwardBindings &bindings, const RendererUniforms &uniforms)
-    -> ForwardResult {
+auto execute_forward(const HeadlessContext &context,
+                     const ForwardBindings &bindings,
+                     const push_constants::Renderer &uniforms) -> ForwardResult {
   validate_forward_bindings(bindings, uniforms);
 
   execute_projection_forward(context, bindings.projection, uniforms);

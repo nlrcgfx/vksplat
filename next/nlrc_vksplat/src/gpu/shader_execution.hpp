@@ -186,27 +186,28 @@ void execute_where(const HeadlessContext &context,
 
 void execute_projection_forward(const HeadlessContext &context,
                                 const ProjectionForwardBindings &bindings,
-                                const RendererUniforms &uniforms);
+                                const push_constants::Renderer &uniforms);
 
 void execute_generate_keys(const HeadlessContext &context,
                            const GenerateKeysBindings &bindings,
-                           const RendererUniforms &uniforms,
+                           const push_constants::Renderer &uniforms,
                            std::size_t output_count);
 
 void execute_compute_tile_ranges(const HeadlessContext &context,
                                  const ComputeTileRangesBindings &bindings,
-                                 const RendererUniforms &uniforms,
+                                 const push_constants::Renderer &uniforms,
                                  std::size_t num_indices);
 
 void execute_rasterize_forward(const HeadlessContext &context,
                                const RasterizeForwardBindings &bindings,
-                               const RendererUniforms &uniforms,
+                               const push_constants::Renderer &uniforms,
                                std::size_t num_indices);
 
 [[nodiscard]] RadixSortResult
 execute_sort(const HeadlessContext &context, const RadixSortBindings &bindings, std::size_t element_count);
 
-[[nodiscard]] ForwardResult
-execute_forward(const HeadlessContext &context, const ForwardBindings &bindings, const RendererUniforms &uniforms);
+[[nodiscard]] ForwardResult execute_forward(const HeadlessContext &context,
+                                            const ForwardBindings &bindings,
+                                            const push_constants::Renderer &uniforms);
 
 } // namespace nlrc::vksplat::gpu

@@ -31,7 +31,7 @@ struct RectBounds final {
   std::uint32_t max_y;
 };
 
-[[nodiscard]] gpu::RendererUniforms projection_uniforms() {
+[[nodiscard]] gpu::push_constants::Renderer projection_uniforms() {
   return {
       kImageHeight,
       kImageWidth,

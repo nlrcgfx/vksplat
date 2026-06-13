@@ -135,7 +135,7 @@ class ShaderCompiler:
                     ShaderJob("cumsum_scan_block_sums", {"CUMSUM_PHASE": 2}),
                     ShaderJob("cumsum_add_block_offsets", {"CUMSUM_PHASE": 3}),
                 ],
-                deps=["config.slang"],
+                deps=["config.slang", "push_constants.slang"],
             ),
             ShaderSource(source="sum.slang", language="slang", jobs=[ShaderJob("sum", {})], deps=["config.slang"]),
             ShaderSource(source="where.slang", language="slang", jobs=[ShaderJob("where", {})], deps=["config.slang"]),
@@ -143,7 +143,7 @@ class ShaderCompiler:
                 source="vertex_shader.slang",
                 language="slang",
                 jobs=[ShaderJob("projection_forward", {"EXPORT_MODE": 0})],
-                deps=["config.slang", "utils.slang", "spherical_harmonics.slang"],
+                deps=["config.slang", "utils.slang", "push_constants.slang", "spherical_harmonics.slang"],
             ),
             ShaderSource(
                 source="tile_shader.slang",
@@ -152,13 +152,13 @@ class ShaderCompiler:
                     ShaderJob("generate_keys", {"ENTRY": 1}),
                     ShaderJob("compute_tile_ranges", {"ENTRY": 2}),
                 ],
-                deps=["config.slang", "utils.slang"],
+                deps=["config.slang", "utils.slang", "push_constants.slang"],
             ),
             ShaderSource(
                 source="alphablend_shader.slang",
                 language="slang",
                 jobs=[ShaderJob("rasterize_forward", {"EXPORT_MODE": 0})],
-                deps=["config.slang", "utils.slang"],
+                deps=["config.slang", "utils.slang", "push_constants.slang"],
             ),
             ShaderSource(
                 source="radix_sort/upsweep.comp",

@@ -48,7 +48,7 @@ struct PixelState final {
   float transmittance;
 };
 
-[[nodiscard]] gpu::RendererUniforms make_uniforms(std::uint32_t num_splats) {
+[[nodiscard]] gpu::push_constants::Renderer make_uniforms(std::uint32_t num_splats) {
   return {
       kImageHeight,
       kImageWidth,

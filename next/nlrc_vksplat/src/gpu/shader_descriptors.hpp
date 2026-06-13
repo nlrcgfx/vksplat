@@ -35,20 +35,22 @@ enum class ShaderId : std::uint8_t {
   RadixSortDownsweep,
 };
 
-struct ElementCountPushConstants final {
+namespace push_constants {
+
+struct ElementCount final {
   std::uint32_t num_elements{};
 };
 
-static_assert(sizeof(ElementCountPushConstants) == 4);
+static_assert(sizeof(ElementCount) == 4);
 
-struct RadixSortPushConstants final {
+struct RadixSort final {
   std::uint32_t pass{};
   std::uint32_t element_count{};
 };
 
-static_assert(sizeof(RadixSortPushConstants) == 8);
+static_assert(sizeof(RadixSort) == 8);
 
-struct RendererUniforms final {
+struct Renderer final {
   std::uint32_t image_height{};
   std::uint32_t image_width{};
   std::uint32_t grid_height{};
@@ -65,11 +67,13 @@ struct RendererUniforms final {
   std::array<float, 16> world_view_transform{};
 };
 
-static_assert(sizeof(RendererUniforms) == 128);
-static_assert(sizeof(RendererUniforms) <= kMaxPushConstantBytes);
-static_assert(offsetof(RendererUniforms, fx) == 32);
-static_assert(offsetof(RendererUniforms, dist_coeffs) == 48);
-static_assert(offsetof(RendererUniforms, world_view_transform) == 64);
+static_assert(sizeof(Renderer) == 128);
+static_assert(sizeof(Renderer) <= kMaxPushConstantBytes);
+static_assert(offsetof(Renderer, fx) == 32);
+static_assert(offsetof(Renderer, dist_coeffs) == 48);
+static_assert(offsetof(Renderer, world_view_transform) == 64);
+
+} // namespace push_constants
 
 struct ShaderBindingDescriptor final {
   const char *name{};
@@ -295,8 +299,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "cumsum_single_pass",
         make_span(kCumsumBindings),
         kCumsumDescriptorBindingCount,
-        "ElementCountPushConstants",
-        sizeof(ElementCountPushConstants),
+        "push_constants::ElementCount",
+        sizeof(push_constants::ElementCount),
         {VKSPLAT_CUMSUM_BLOCK_SIZE, "ceil(element_count / VKSPLAT_CUMSUM_BLOCK_SIZE),1,1"},
         kNoProfileNotes,
         {"slang/cumsum.slang", "slang", make_span(kCumsumSinglePassDefines)},
@@ -306,8 +310,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "cumsum_block_scan",
         make_span(kCumsumBindings),
         kCumsumDescriptorBindingCount,
-        "ElementCountPushConstants",
-        sizeof(ElementCountPushConstants),
+        "push_constants::ElementCount",
+        sizeof(push_constants::ElementCount),
         {VKSPLAT_CUMSUM_BLOCK_SIZE, "ceil(phase_element_count / VKSPLAT_CUMSUM_BLOCK_SIZE),1,1"},
         kNoProfileNotes,
         {"slang/cumsum.slang", "slang", make_span(kCumsumBlockScanDefines)},
@@ -317,8 +321,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "cumsum_scan_block_sums",
         make_span(kCumsumBindings),
         kCumsumDescriptorBindingCount,
-        "ElementCountPushConstants",
-        sizeof(ElementCountPushConstants),
+        "push_constants::ElementCount",
+        sizeof(push_constants::ElementCount),
         {VKSPLAT_CUMSUM_BLOCK_SIZE, "ceil(phase_element_count / VKSPLAT_CUMSUM_BLOCK_SIZE),1,1"},
         kNoProfileNotes,
         {"slang/cumsum.slang", "slang", make_span(kCumsumScanBlockSumsDefines)},
@@ -328,8 +332,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "cumsum_add_block_offsets",
         make_span(kCumsumBindings),
         kCumsumDescriptorBindingCount,
-        "ElementCountPushConstants",
-        sizeof(ElementCountPushConstants),
+        "push_constants::ElementCount",
+        sizeof(push_constants::ElementCount),
         {VKSPLAT_CUMSUM_BLOCK_SIZE, "ceil(element_count / VKSPLAT_CUMSUM_BLOCK_SIZE),1,1"},
         kNoProfileNotes,
         {"slang/cumsum.slang", "slang", make_span(kCumsumAddBlockOffsetsDefines)},
@@ -339,8 +343,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "sum",
         make_span(kSumBindings),
         kSumDescriptorBindingCount,
-        "ElementCountPushConstants",
-        sizeof(ElementCountPushConstants),
+        "push_constants::ElementCount",
+        sizeof(push_constants::ElementCount),
         {VKSPLAT_SUM_BLOCK_SIZE, "ceil(element_count / VKSPLAT_SUM_BLOCK_SIZE),1,1"},
         kNoProfileNotes,
         {"slang/sum.slang", "slang", make_span(kNoDefines)},
@@ -350,8 +354,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "where",
         make_span(kWhereBindings),
         kWhereDescriptorBindingCount,
-        "ElementCountPushConstants",
-        sizeof(ElementCountPushConstants),
+        "push_constants::ElementCount",
+        sizeof(push_constants::ElementCount),
         {VKSPLAT_WHERE_BLOCK_SIZE, "ceil(element_count / VKSPLAT_WHERE_BLOCK_SIZE),1,1"},
         kNoProfileNotes,
         {"slang/where.slang", "slang", make_span(kNoDefines)},
@@ -361,8 +365,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "projection_forward",
         make_span(kProjectionForwardBindings),
         kProjectionForwardDescriptorBindingCount,
-        "RendererUniforms",
-        sizeof(RendererUniforms),
+        "push_constants::Renderer",
+        sizeof(push_constants::Renderer),
         {VKSPLAT_SUBGROUP_SIZE, "ceil(num_splats / VKSPLAT_SUBGROUP_SIZE),1,1"},
         kRectTileSpaceProfileNotes,
         {"slang/vertex_shader.slang", "slang", make_span(kProjectionForwardDefines)},
@@ -372,8 +376,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "generate_keys",
         make_span(kGenerateKeysBindings),
         kGenerateKeysDescriptorBindingCount,
-        "RendererUniforms",
-        sizeof(RendererUniforms),
+        "push_constants::Renderer",
+        sizeof(push_constants::Renderer),
         {VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE,
          "ceil(num_splats / VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE),1,1"},
         kRectTileSpaceProfileNotes,
@@ -384,8 +388,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "compute_tile_ranges",
         make_span(kComputeTileRangesBindings),
         kComputeTileRangesDescriptorBindingCount,
-        "RendererUniforms",
-        sizeof(RendererUniforms),
+        "push_constants::Renderer",
+        sizeof(push_constants::Renderer),
         {VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS,
          "ceil((num_indices + 1) / VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS),1,1"},
         kNoProfileNotes,
@@ -396,8 +400,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "rasterize_forward",
         make_span(kRasterizeForwardBindings),
         kRasterizeForwardDescriptorBindingCount,
-        "RendererUniforms",
-        sizeof(RendererUniforms),
+        "push_constants::Renderer",
+        sizeof(push_constants::Renderer),
         {VKSPLAT_TILE_SIZE, "ceil(image_width / VKSPLAT_TILE_WIDTH),ceil(image_height / VKSPLAT_TILE_HEIGHT),1"},
         kNoProfileNotes,
         {"slang/alphablend_shader.slang", "slang", make_span(kRasterizeForwardDefines)},
@@ -407,8 +411,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "radix_sort_upsweep",
         make_span(kRadixSortUpsweepBindings),
         kRadixSortUpsweepDescriptorBindingCount,
-        "RadixSortPushConstants",
-        sizeof(RadixSortPushConstants),
+        "push_constants::RadixSort",
+        sizeof(push_constants::RadixSort),
         {VKSPLAT_RADIX_PARTITION_SIZE, "ceil(element_count / VKSPLAT_RADIX_PARTITION_SIZE),1,1"},
         kRadixSortProfileNotes,
         {"shader/radix_sort/upsweep.comp", "glsl", make_span(kNoDefines)},
@@ -418,8 +422,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "radix_sort_spine",
         make_span(kRadixSortSpineBindings),
         kRadixSortSpineDescriptorBindingCount,
-        "RadixSortPushConstants",
-        sizeof(RadixSortPushConstants),
+        "push_constants::RadixSort",
+        sizeof(push_constants::RadixSort),
         {VKSPLAT_RADIX_SORT_RADIX, "VKSPLAT_RADIX_SORT_RADIX,1,1"},
         kRadixSortProfileNotes,
         {"shader/radix_sort/spine.comp", "glsl", make_span(kNoDefines)},
@@ -429,8 +433,8 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         "radix_sort_downsweep",
         make_span(kRadixSortDownsweepBindings),
         kRadixSortDownsweepDescriptorBindingCount,
-        "RadixSortPushConstants",
-        sizeof(RadixSortPushConstants),
+        "push_constants::RadixSort",
+        sizeof(push_constants::RadixSort),
         {VKSPLAT_RADIX_PARTITION_SIZE, "ceil(element_count / VKSPLAT_RADIX_PARTITION_SIZE),1,1"},
         kRadixSortProfileNotes,
         {"shader/radix_sort/downsweep.comp", "glsl", make_span(kNoDefines)},

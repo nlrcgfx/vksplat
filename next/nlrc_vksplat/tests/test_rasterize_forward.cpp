@@ -53,7 +53,7 @@ struct PixelState final {
   };
 }
 
-[[nodiscard]] gpu::RendererUniforms make_uniforms(const ImageGrid &image_grid, std::uint32_t num_splats) {
+[[nodiscard]] gpu::push_constants::Renderer make_uniforms(const ImageGrid &image_grid, std::uint32_t num_splats) {
   return {
       image_grid.image_height,
       image_grid.image_width,
