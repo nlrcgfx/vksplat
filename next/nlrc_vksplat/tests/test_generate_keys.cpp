@@ -18,8 +18,6 @@ using namespace nlrc::vksplat;
 
 namespace {
 
-constexpr std::uint32_t kGridHeight = 2;
-constexpr std::uint32_t kGridWidth = 2;
 constexpr std::uint32_t kDepthBits = 23;
 
 static_assert(VKSPLAT_SORTING_KEY_BITS == 32, "Update generate_keys tests when 64-bit keys are enabled.");
@@ -31,7 +29,7 @@ void require_valid_generate_keys_output(const std::vector<std::uint32_t> &keys,
   for (std::size_t index = 0; index < keys.size(); ++index) {
     INFO("output index: " << index);
     const auto tile_id = keys[index] >> kDepthBits;
-    REQUIRE(tile_id < kGridWidth * kGridHeight);
+    REQUIRE(tile_id < tests::kDefaultGridWidth * tests::kDefaultGridHeight);
     REQUIRE(indices[index] >= 0);
     REQUIRE(indices[index] < static_cast<std::int32_t>(num_splats));
   }
@@ -133,39 +131,17 @@ TEST_CASE("Chain projection_forward cumsum generate_keys", "[gpu]") {
 
   const gpu::HeadlessContext context;
 
-  auto xyz_ws_buffer = gpu::make_storage_buffer(context, fixture.xyz_ws);
-  auto sh_coeffs_buffer = gpu::make_storage_buffer(context, fixture.sh_coeffs);
-  auto rotations_buffer = gpu::make_storage_buffer(context, fixture.rotations);
-  auto scales_opacs_buffer = gpu::make_storage_buffer(context, fixture.scales_opacs);
-  auto tiles_touched_buffer = gpu::make_storage_buffer(context, fixture.tiles_touched);
-  auto rect_tile_space_buffer = gpu::make_storage_buffer(context, fixture.rect_tile_space);
-  auto radii_buffer = gpu::make_storage_buffer(context, fixture.radii);
-  auto xy_vs_buffer = gpu::make_storage_buffer(context, fixture.xy_vs);
-  auto depths_buffer = gpu::make_storage_buffer(context, fixture.depths);
-  auto inv_cov_vs_opacity_buffer = gpu::make_storage_buffer(context, fixture.inv_cov_vs_opacity);
-  auto rgb_buffer = gpu::make_storage_buffer(context, fixture.rgb);
-
-  gpu::ProjectionForwardBindings projection_bindings{};
-  projection_bindings.xyz_ws = &xyz_ws_buffer;
-  projection_bindings.sh_coeffs = &sh_coeffs_buffer;
-  projection_bindings.rotations = &rotations_buffer;
-  projection_bindings.scales_opacs = &scales_opacs_buffer;
-  projection_bindings.tiles_touched = &tiles_touched_buffer;
-  projection_bindings.rect_tile_space = &rect_tile_space_buffer;
-  projection_bindings.radii = &radii_buffer;
-  projection_bindings.xy_vs = &xy_vs_buffer;
-  projection_bindings.depths = &depths_buffer;
-  projection_bindings.inv_cov_vs_opacity = &inv_cov_vs_opacity_buffer;
-  projection_bindings.rgb = &rgb_buffer;
+  auto projection_buffers = tests::upload_projection_fixture(context, fixture);
 
   const auto uniforms = tests::default_renderer_uniforms(1U);
-  gpu::execute_projection_forward(context, projection_bindings, uniforms);
+  gpu::execute_projection_forward(context, projection_buffers.bindings, uniforms);
 
   std::vector<std::int32_t> index_buffer_offset(fixture.tiles_touched.size(), 0);
   auto index_buffer_offset_buffer = gpu::make_storage_buffer(context, index_buffer_offset);
 
   // The cumsum helper produces the inclusive offsets consumed by generate_keys.
-  gpu::execute_cumsum(context, tiles_touched_buffer, index_buffer_offset_buffer, fixture.tiles_touched.size());
+  gpu::execute_cumsum(context, projection_buffers.tiles_touched, index_buffer_offset_buffer,
+                      fixture.tiles_touched.size());
 
   index_buffer_offset = index_buffer_offset_buffer.read_back<std::int32_t>(fixture.tiles_touched.size());
   REQUIRE_FALSE(index_buffer_offset.empty());
@@ -178,10 +154,10 @@ TEST_CASE("Chain projection_forward cumsum generate_keys", "[gpu]") {
   auto indices_buffer = gpu::make_storage_buffer(context, initial_indices);
 
   gpu::GenerateKeysBindings generate_keys_bindings{};
-  generate_keys_bindings.xy_vs = &xy_vs_buffer;
-  generate_keys_bindings.inv_cov_vs_opacity = &inv_cov_vs_opacity_buffer;
-  generate_keys_bindings.depths = &depths_buffer;
-  generate_keys_bindings.rect_tile_space = &rect_tile_space_buffer;
+  generate_keys_bindings.xy_vs = &projection_buffers.xy_vs;
+  generate_keys_bindings.inv_cov_vs_opacity = &projection_buffers.inv_cov_vs_opacity;
+  generate_keys_bindings.depths = &projection_buffers.depths;
+  generate_keys_bindings.rect_tile_space = &projection_buffers.rect_tile_space;
   generate_keys_bindings.index_buffer_offset = &index_buffer_offset_buffer;
   generate_keys_bindings.unsorted_keys = &keys_buffer;
   generate_keys_bindings.unsorted_gauss_idx = &indices_buffer;

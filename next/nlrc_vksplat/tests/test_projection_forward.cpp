@@ -10,7 +10,6 @@
 #include "golden_compare.hpp"
 #include "gpu/headless_context.hpp"
 #include "gpu/shader_execution.hpp"
-#include "gpu/storage_buffer.hpp"
 #include "gpu_available.hpp"
 #include "nlrc_vksplat_config.hpp"
 #include "span.hpp"
@@ -71,41 +70,19 @@ TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
 
   const gpu::HeadlessContext context;
 
-  auto xyz_ws_buffer = gpu::make_storage_buffer(context, fixture.xyz_ws);
-  auto sh_coeffs_buffer = gpu::make_storage_buffer(context, fixture.sh_coeffs);
-  auto rotations_buffer = gpu::make_storage_buffer(context, fixture.rotations);
-  auto scales_opacs_buffer = gpu::make_storage_buffer(context, fixture.scales_opacs);
-  auto tiles_touched_buffer = gpu::make_storage_buffer(context, fixture.tiles_touched);
-  auto rect_tile_space_buffer = gpu::make_storage_buffer(context, fixture.rect_tile_space);
-  auto radii_buffer = gpu::make_storage_buffer(context, fixture.radii);
-  auto xy_vs_buffer = gpu::make_storage_buffer(context, fixture.xy_vs);
-  auto depths_buffer = gpu::make_storage_buffer(context, fixture.depths);
-  auto inv_cov_vs_opacity_buffer = gpu::make_storage_buffer(context, fixture.inv_cov_vs_opacity);
-  auto rgb_buffer = gpu::make_storage_buffer(context, fixture.rgb);
-
-  gpu::ProjectionForwardBindings bindings{};
-  bindings.xyz_ws = &xyz_ws_buffer;
-  bindings.sh_coeffs = &sh_coeffs_buffer;
-  bindings.rotations = &rotations_buffer;
-  bindings.scales_opacs = &scales_opacs_buffer;
-  bindings.tiles_touched = &tiles_touched_buffer;
-  bindings.rect_tile_space = &rect_tile_space_buffer;
-  bindings.radii = &radii_buffer;
-  bindings.xy_vs = &xy_vs_buffer;
-  bindings.depths = &depths_buffer;
-  bindings.inv_cov_vs_opacity = &inv_cov_vs_opacity_buffer;
-  bindings.rgb = &rgb_buffer;
+  auto projection_buffers = tests::upload_projection_fixture(context, fixture);
 
   const auto uniforms = tests::default_renderer_uniforms(1U);
-  gpu::execute_projection_forward(context, bindings, uniforms);
+  gpu::execute_projection_forward(context, projection_buffers.bindings, uniforms);
 
-  const auto actual_tiles_touched = tiles_touched_buffer.read_back<std::int32_t>(1);
-  const auto actual_rect_tile_space = rect_tile_space_buffer.read_back<RectTileSpace>(fixture.rect_tile_space.size());
-  const auto actual_radii = radii_buffer.read_back<std::int32_t>(1);
-  const auto actual_xy_vs = xy_vs_buffer.read_back<float>(2);
-  const auto actual_depths = depths_buffer.read_back<float>(1);
-  const auto actual_inv_cov_vs_opacity = inv_cov_vs_opacity_buffer.read_back<float>(4);
-  const auto actual_rgb = rgb_buffer.read_back<float>(3);
+  const auto actual_tiles_touched = projection_buffers.tiles_touched.read_back<std::int32_t>(1);
+  const auto actual_rect_tile_space =
+      projection_buffers.rect_tile_space.read_back<RectTileSpace>(fixture.rect_tile_space.size());
+  const auto actual_radii = projection_buffers.radii.read_back<std::int32_t>(1);
+  const auto actual_xy_vs = projection_buffers.xy_vs.read_back<float>(2);
+  const auto actual_depths = projection_buffers.depths.read_back<float>(1);
+  const auto actual_inv_cov_vs_opacity = projection_buffers.inv_cov_vs_opacity.read_back<float>(4);
+  const auto actual_rgb = projection_buffers.rgb.read_back<float>(3);
 
   REQUIRE_NOTHROW(tests::assert_no_nan_inf(make_span(actual_xy_vs)));
   REQUIRE_NOTHROW(tests::assert_no_nan_inf(make_span(actual_depths)));

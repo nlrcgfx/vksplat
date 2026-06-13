@@ -9,19 +9,15 @@
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
 #include "fixtures.hpp"
-#include "golden_compare.hpp"
 #include "gpu/headless_context.hpp"
 #include "gpu/shader_execution.hpp"
 #include "gpu/storage_buffer.hpp"
 #include "gpu_available.hpp"
 #include "nlrc_vksplat_config.hpp"
-#include "span.hpp"
 
 using namespace nlrc::vksplat;
 
 namespace {
-
-constexpr std::size_t kPixelChannels = 4;
 
 struct ImageGrid final {
   std::uint32_t image_height;
@@ -33,7 +29,7 @@ struct ImageGrid final {
 [[nodiscard]] ImageGrid image_grid_from_manifest(const tests::FixtureManifest &manifest) {
   const auto &pixel_state_spec = tests::buffer_spec(manifest, "pixel_state");
   REQUIRE(pixel_state_spec.shape.size() == 3U);
-  REQUIRE(pixel_state_spec.shape[2] == kPixelChannels);
+  REQUIRE(pixel_state_spec.shape[2] == tests::kPixelChannels);
   REQUIRE(pixel_state_spec.shape[0] % VKSPLAT_TILE_HEIGHT == 0U);
   REQUIRE(pixel_state_spec.shape[1] % VKSPLAT_TILE_WIDTH == 0U);
 
@@ -59,24 +55,6 @@ void require_valid_sorted_ranges(const std::vector<std::uint32_t> &sorted_keys,
   }
 
   tests::require_valid_tile_ranges(tile_ranges, sorted_keys, image_grid.grid_width, image_grid.grid_height);
-}
-
-void require_output_invariants(const std::vector<float> &pixel_state,
-                               const std::vector<std::int32_t> &n_contributors,
-                               std::size_t num_indices) {
-  REQUIRE_NOTHROW(tests::assert_no_nan_inf(make_span(pixel_state)));
-
-  REQUIRE(pixel_state.size() % kPixelChannels == 0U);
-  for (std::size_t index = 3; index < pixel_state.size(); index += kPixelChannels) {
-    INFO("pixel_state index: " << index);
-    REQUIRE(pixel_state[index] >= 0.0F);
-    REQUIRE(pixel_state[index] <= 1.0F);
-  }
-
-  for (const auto contributors : n_contributors) {
-    REQUIRE(contributors >= 0);
-    REQUIRE(contributors <= static_cast<std::int32_t>(num_indices));
-  }
 }
 
 void require_empty_tile_centers_are_baseline(const std::vector<float> &pixel_state,
@@ -166,7 +144,7 @@ TEST_CASE("Dispatch rasterize_forward shader", "[gpu]") {
       REQUIRE(xy_vs.size() == num_splats * 2U);
       REQUIRE(inv_cov_vs_opacity.size() == num_splats * 4U);
       REQUIRE(rgb.size() == num_splats * 3U);
-      REQUIRE(initial_pixel_state.size() == num_pixels * kPixelChannels);
+      REQUIRE(initial_pixel_state.size() == num_pixels * tests::kPixelChannels);
       REQUIRE(initial_n_contributors.size() == num_pixels);
       REQUIRE(std::all_of(initial_pixel_state.begin(), initial_pixel_state.end(), [](float value) {
         return value == -1.0F;
@@ -206,7 +184,8 @@ TEST_CASE("Dispatch rasterize_forward shader", "[gpu]") {
       const auto actual_pixel_state = pixel_state_buffer.read_back<float>(initial_pixel_state.size());
       const auto actual_n_contributors = n_contributors_buffer.read_back<std::int32_t>(initial_n_contributors.size());
 
-      require_output_invariants(actual_pixel_state, actual_n_contributors, sorted_gauss_idx.size());
+      tests::require_pixel_invariants(actual_pixel_state, actual_n_contributors, image_grid.image_width,
+                                      image_grid.image_height, sorted_gauss_idx.size());
       require_empty_tile_centers_are_baseline(actual_pixel_state, actual_n_contributors, tile_ranges, image_grid);
       require_splat_centers_have_contribution(actual_pixel_state, actual_n_contributors, xy_vs, sorted_gauss_idx,
                                               image_grid);
