@@ -316,6 +316,18 @@ def _recompute_derived_values(values: dict[str, int]) -> None:
     values["VKSPLAT_MORTON_STATS_THREADS"] = values["VKSPLAT_SUBGROUP_SIZE"] * values["VKSPLAT_SUBGROUP_SIZE"]
 
 
+def load_config_values(
+    header: Path = DEFAULT_HEADER,
+    emulate_int64: int | None = None,
+    emulate_f32_atomic: int | None = None,
+) -> dict[str, int]:
+    defines = _parse_defines(header)
+    values = _resolve_defines(defines)
+    _apply_overrides(values, emulate_int64, emulate_f32_atomic)
+    _recompute_derived_values(values)
+    return values
+
+
 def generate_shader_config(
     header: Path = DEFAULT_HEADER,
     slang_out: Path = DEFAULT_SLANG_OUT,
@@ -325,10 +337,7 @@ def generate_shader_config(
     emulate_f32_atomic: int | None = None,
     check: bool = False,
 ) -> dict[str, Any]:
-    defines = _parse_defines(header)
-    values = _resolve_defines(defines)
-    _apply_overrides(values, emulate_int64, emulate_f32_atomic)
-    _recompute_derived_values(values)
+    values = load_config_values(header, emulate_int64, emulate_f32_atomic)
     tensor_configs = _tensor_configs(values)
 
     outputs = {

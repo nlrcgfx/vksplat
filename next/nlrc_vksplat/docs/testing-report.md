@@ -56,7 +56,7 @@ Paths below use PowerShell from the repo root.
 | Full Windows build and tests | `powershell -ExecutionPolicy Bypass -File next\nlrc_vksplat\scripts\build-windows.ps1 -Preset windows-debug -RunTests` |
 | Configure, build, and CTest | `cmake --preset windows-debug`, `cmake --build --preset windows-debug`, `ctest --preset windows-debug --output-on-failure` (from `next/nlrc_vksplat`) |
 | Windows emulated-int64 workflow | Copy `next/nlrc_vksplat/CMakeUserPresets.json.example` to `CMakeUserPresets.json`, then `cmake --workflow --preset windows-debug-emulated-int64` from `next/nlrc_vksplat` (or `build-windows.ps1 -Preset windows-debug-emulated-int64 -RunTests`) |
-| Fixture drift check | `python test_data\generate_fixtures.py --check` |
+| Config mirror and fixture drift check | `python test_data\generate_fixtures.py --check` |
 
 Primary Windows workflow:
 
@@ -65,9 +65,10 @@ cd next\nlrc_vksplat
 powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1 -Preset windows-debug -RunTests
 ```
 
-CMake also registers `nlrc_vksplat_fixture_generation_check`, so fixture drift is
-validated by CTest when `BUILD_TESTING` is enabled. If `python` is not on `PATH`,
-use `scripts/build-windows.ps1 -PythonExe <path>` or configure CMake with
+CMake also registers `nlrc_vksplat_fixture_generation_check`, so Python-to-C++
+config mirror drift and fixture byte drift are validated by CTest when
+`BUILD_TESTING` is enabled. If `python` is not on `PATH`, use
+`scripts/build-windows.ps1 -PythonExe <path>` or configure CMake with
 `-DPython_EXECUTABLE=<path>`.
 
 ## Coverage matrix
@@ -75,7 +76,7 @@ use `scripts/build-windows.ps1 -PythonExe <path>` or configure CMake with
 | Area | Tag | What is tested | Test entrypoints | Covered behavior |
 |------|-----|----------------|------------------|------------------|
 | Test harness | `[host]` | Catch2 executable and CTest discovery | `test_main.cpp`, `tests/CMakeLists.txt` | Test binary links, Catch2 test cases are discovered, generator drift is registered as a separate CTest. |
-| Fixture generator | `[host]` | Synthetic fixture reproducibility | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check` | Generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte. |
+| Fixture generator | `[host]` | Synthetic fixture reproducibility and config mirrors | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check` | Fixture-sensitive Python constants match evaluated `VKSPLAT_*` values from `nlrc_vksplat_config.hpp`; generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte. |
 | Fixture catalog | `[host]` | Whole catalog validity | `test_fixture_catalog.cpp` | Every fixture/golden manifest loads, stage names match directories, build profile matches, bindings reference buffers, files exist, and file sizes match dtype/shape. |
 | Manifest parser | `[host]` | Manifest fields and rejection paths | `test_fixture_loader.cpp`, `fixture_manifest.cpp` | Supported dtype parsing, dtype sizes, invalid dtype rejection, malformed JSON rejection, empty or invalid shape rejection. |
 | Fixture loader | `[host]` | Typed raw-buffer loading | `test_fixture_loader.cpp`, `fixture_loader.cpp` | Typed float loading, missing buffer names, missing files, dtype mismatch, size mismatch, empty shape guards, little-endian `int32` payloads. |
@@ -104,6 +105,9 @@ All listed fixtures use synthetic invariant oracles unless noted otherwise in th
 
 The Python fixture generator mirrors shader sizing constants from
 [`next/nlrc_vksplat/src/nlrc_vksplat_config.hpp`](../src/nlrc_vksplat_config.hpp).
+`generate_fixtures.py --check` enforces the mirrors below before comparing
+generated fixture bytes. `--write` also fails before modifying files if these
+mirrors drift.
 
 #### Block-size mirrors
 
@@ -231,6 +235,9 @@ Additional review items for this report:
 - Revisit `.pre-commit-config.yaml` large-file exceptions if the two-level fixture grows.
 - Update this document if boundary formulas or covered fixture stages change.
 - For radix changes, re-check pass count, partition histogram size, and whether 64-bit keys are now in scope.
+- When Phase 4/5 fixtures hardcode SSIM or tensor-backward config values, add
+  those Python constants to the mirror guard in `generate_fixtures.py` in the
+  same change.
 
 ## GPU policy and reliability
 
@@ -298,7 +305,6 @@ Optional improvements; not required for current test changes.
 - Expand manifest profile checks from `harness_smoke` to every generated fixture if build-profile variants are introduced.
 - Add generator unit tests for drift diagnostics, missing files, extra files, and malformed fixture specs.
 - If future cumsum block sizes make `B * B + 1` too large to commit, move the two-level cumsum case to generated-at-test-time data or introduce a dedicated small test shader profile.
-- Add a generator or CTest guard that verifies Python radix constants mirror `nlrc_vksplat_config.hpp`.
 - Add reference-parity fixtures only after the buffer source, baseline tag, and expected tolerance are documented.
 - Add shader-stage coverage as new rewrite kernels become callable from tests.
 - Add CI documentation describing which jobs run host-only tests and which jobs require GPU hardware.
@@ -310,7 +316,7 @@ Required checks when changing tests, fixtures, or documented coverage.
 - New public test helper behavior should have at least one host test.
 - New generated fixture data must come from `test_data/generate_fixtures.py` or document why it is curated separately.
 - Any change to `VKSPLAT_*_BLOCK_SIZE`, `VKSPLAT_RADIX_*`, or `VKSPLAT_SORTING_KEY_BITS` must be reviewed as a fixture catalog change and followed by fixture regeneration plus drift checking.
-- Add a generator or CTest guard that parses `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` and fails if Python generator constants drift from C++ shader-size defines.
+- When new generated fixtures hardcode additional `VKSPLAT_*` values, add those Python constants to the fixture generator mirror guard in the same change.
 - New shader dispatch contracts should include descriptor order, push constants, fixture inputs, and expected outputs.
 - New floating-point comparisons must state epsilon and whether NaN/inf are valid or rejected.
 - New reference-derived tests must record the reference baseline tag and source of the dump.

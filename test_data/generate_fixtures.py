@@ -15,6 +15,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+SCRIPT_PATH = Path(__file__).resolve()
+PROJECT_ROOT = SCRIPT_PATH.parents[1]
+
+SHADER_SCRIPT_DIR = PROJECT_ROOT / "next" / "nlrc_vksplat" / "scripts"
+if str(SHADER_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SHADER_SCRIPT_DIR))
+
+from generate_shader_config import DEFAULT_HEADER, load_config_values
+
 REF_BASELINE_TAG = "ref-baseline-2026-06-12"
 DEFAULT_CMAKE_PRESET = "windows-debug"
 CUMSUM_BLOCK_SIZE = 512
@@ -40,6 +49,23 @@ DTYPE_FORMATS = {
 }
 
 GENERATED_SUBDIRS = ("fixtures", "golden_masters")
+
+# Keep this list to constants this generator directly mirrors. When Phase 4/5
+# fixtures hardcode SSIM or tensor-backward values, add those mirrors here.
+CONFIG_MIRRORS = (
+    ("CUMSUM_BLOCK_SIZE", "VKSPLAT_CUMSUM_BLOCK_SIZE"),
+    ("SUM_BLOCK_SIZE", "VKSPLAT_SUM_BLOCK_SIZE"),
+    ("WHERE_BLOCK_SIZE", "VKSPLAT_WHERE_BLOCK_SIZE"),
+    ("SH_REORDER_SIZE", "VKSPLAT_SH_REORDER_SIZE"),
+    ("TILE_HEIGHT", "VKSPLAT_TILE_HEIGHT"),
+    ("TILE_WIDTH", "VKSPLAT_TILE_WIDTH"),
+    ("SORTING_KEY_BITS", "VKSPLAT_SORTING_KEY_BITS"),
+    ("RADIX_SORT_RADIX", "VKSPLAT_RADIX_SORT_RADIX"),
+    ("RADIX_WORKGROUP_SIZE", "VKSPLAT_RADIX_WORKGROUP_SIZE"),
+    ("RADIX_PARTITION_DIVISION", "VKSPLAT_RADIX_PARTITION_DIVISION"),
+    ("RADIX_PARTITION_SIZE", "VKSPLAT_RADIX_PARTITION_SIZE"),
+    ("RADIX_BITS_PER_PASS", "VKSPLAT_RADIX_BITS_PER_PASS"),
+)
 
 
 @dataclass(frozen=True)
@@ -944,7 +970,53 @@ def compare_generated(actual_root: Path, expected_root: Path) -> list[str]:
     return problems
 
 
+def verify_config_mirrors(header: Path = DEFAULT_HEADER) -> list[str]:
+    values = load_config_values(header)
+    expected_values: list[tuple[str, str, int]] = [
+        (python_name, cxx_name, values[cxx_name]) for python_name, cxx_name in CONFIG_MIRRORS
+    ]
+
+    bits = values["VKSPLAT_SORTING_KEY_BITS"]
+    bits_per_pass = values["VKSPLAT_RADIX_BITS_PER_PASS"]
+    if bits_per_pass == 0 or bits % bits_per_pass != 0:
+        return [
+            "VKSPLAT_SORTING_KEY_BITS="
+            f"{bits} is not divisible by VKSPLAT_RADIX_BITS_PER_PASS={bits_per_pass}"
+        ]
+    expected_values.append(
+        (
+            "RADIX_SORT_PASSES",
+            "VKSPLAT_SORTING_KEY_BITS // VKSPLAT_RADIX_BITS_PER_PASS",
+            bits // bits_per_pass,
+        )
+    )
+
+    problems: list[str] = []
+    globals_ = globals()
+    for python_name, cxx_name, expected in expected_values:
+        actual = globals_[python_name]
+        if actual != expected:
+            problems.append(f"{python_name}={actual} but {cxx_name}={expected}")
+    return problems
+
+
+def report_config_mirror_problems(problems: list[str]) -> None:
+    print("Fixture generator config mirror drift detected.", file=sys.stderr)
+    print(
+        "Update test_data/generate_fixtures.py constants to match "
+        "next/nlrc_vksplat/src/nlrc_vksplat_config.hpp.",
+        file=sys.stderr,
+    )
+    for problem in problems:
+        print(f"  {problem}", file=sys.stderr)
+
+
 def check(root: Path) -> int:
+    mirror_problems = verify_config_mirrors()
+    if mirror_problems:
+        report_config_mirror_problems(mirror_problems)
+        return 1
+
     with tempfile.TemporaryDirectory(prefix="nlrc_vksplat_fixtures_") as temp:
         expected_root = Path(temp) / "test_data"
         generate(expected_root)
@@ -973,6 +1045,10 @@ def main() -> int:
 
     root = args.root.resolve()
     if args.write:
+        mirror_problems = verify_config_mirrors()
+        if mirror_problems:
+            report_config_mirror_problems(mirror_problems)
+            return 1
         generate(root)
         print(f"[OK] Wrote fixture data under {root}")
         return 0
