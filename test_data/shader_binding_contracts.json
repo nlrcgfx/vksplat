@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "shaders": {
+    "cumsum_single_pass": [
+      "input",
+      "output",
+      "block_sums"
+    ],
+    "cumsum_block_scan": [
+      "input",
+      "output",
+      "block_sums"
+    ],
+    "cumsum_scan_block_sums": [
+      "input",
+      "output",
+      "block_sums"
+    ],
+    "cumsum_add_block_offsets": [
+      "input",
+      "output",
+      "block_sums"
+    ],
+    "sum": [
+      "input",
+      "output"
+    ],
+    "where": [
+      "mask",
+      "mask_cumsum",
+      "out_indices"
+    ],
+    "projection_forward": [
+      "xyz_ws",
+      "sh_coeffs",
+      "rotations",
+      "scales_opacs",
+      "tiles_touched",
+      "rect_tile_space",
+      "radii",
+      "xy_vs",
+      "depths",
+      "inv_cov_vs_opacity",
+      "rgb"
+    ],
+    "generate_keys": [
+      "xy_vs",
+      "inv_cov_vs_opacity",
+      "depths",
+      "rect_tile_space",
+      "index_buffer_offset",
+      "unsorted_keys",
+      "unsorted_gauss_idx"
+    ],
+    "compute_tile_ranges": [
+      "sorted_keys",
+      "tile_ranges"
+    ],
+    "rasterize_forward": [
+      "sorted_gauss_idx",
+      "tile_ranges",
+      "xy_vs",
+      "inv_cov_vs_opacity",
+      "rgb",
+      "pixel_state",
+      "n_contributors"
+    ],
+    "radix_sort_upsweep": [
+      "unsorted_keys",
+      "_sorting_histogram",
+      "_sorting_histogram_cumsum"
+    ],
+    "radix_sort_spine": [
+      "_sorting_histogram",
+      "_sorting_histogram_cumsum"
+    ],
+    "radix_sort_downsweep": [
+      "_sorting_histogram",
+      "_sorting_histogram_cumsum",
+      "unsorted_keys",
+      "unsorted_gauss_idx",
+      "sorted_keys",
+      "sorted_gauss_idx"
+    ]
+  },
+  "fixture_contracts": {
+    "radix_sort_pipeline": [
+      "sorting_keys_1",
+      "sorting_gauss_idx_1",
+      "sorting_keys_2",
+      "sorting_gauss_idx_2",
+      "_sorting_histogram",
+      "_sorting_histogram_cumsum"
+    ],
+    "cumsum_multi_block": [
+      "input",
+      "output",
+      "block_sums"
+    ],
+    "cumsum_multi_block_two_level": [
+      "input",
+      "output",
+      "block_sums",
+      "block_sums2"
+    ],
+    "cumsum_output": [
+      "output"
+    ],
+    "sum_output": [
+      "output"
+    ],
+    "where_output": [
+      "out_indices"
+    ],
+    "generate_keys_output": [
+      "unsorted_keys",
+      "unsorted_gauss_idx"
+    ],
+    "compute_tile_ranges_output": [
+      "tile_ranges"
+    ],
+    "radix_sort_output": [
+      "sorted_keys",
+      "sorted_gauss_idx"
+    ],
+    "no_exact_golden_outputs": []
+  }
+}

@@ -109,6 +109,12 @@ struct FixtureBindingContract final {
   Span<const char *const> bindings;
 };
 
+// Kernel port checklist:
+// 1. Add the logical shader registry entry and binding table here.
+// 2. Add a checked *_storage_bindings() helper in shader_binding_resolver.hpp.
+// 3. Route fixture/golden manifests through shader_fixture_mapping.cpp or an explicit untracked path.
+// 4. Keep test_data/shader_binding_contracts.json and descriptor/generator checks green.
+
 namespace detail {
 
 inline constexpr std::array<ShaderBindingDescriptor, 3> kCumsumBindings = {{
@@ -244,6 +250,21 @@ template <ShaderId Id, std::size_t Index>
 [[nodiscard]] constexpr const char *shader_binding_name() {
   static_assert(Index < shader_binding_count_v<Id>, "Shader binding index is out of range");
   return ShaderBindingTraits<Id>::bindings()[Index].name;
+}
+
+[[nodiscard]] constexpr bool storage_binding_name_equal(const char *left, std::string_view right) noexcept {
+  if (left == nullptr) {
+    return right.empty();
+  }
+
+  std::size_t index = 0;
+  while (left[index] != '\0') {
+    if (index >= right.size() || left[index] != right[index]) {
+      return false;
+    }
+    ++index;
+  }
+  return index == right.size();
 }
 
 inline constexpr std::uint32_t kCumsumDescriptorBindingCount =
@@ -440,10 +461,41 @@ inline constexpr std::array<const char *, 4> kCumsumTwoLevelFixtureBindings = {{
     "block_sums2",
 }};
 
-inline constexpr std::array<FixtureBindingContract, 3> kFixtureBindingContracts = {{
+inline constexpr std::array<const char *, 1> kOutputFixtureBindings = {{
+    "output",
+}};
+
+inline constexpr std::array<const char *, 1> kWhereOutputFixtureBindings = {{
+    "out_indices",
+}};
+
+inline constexpr std::array<const char *, 2> kGenerateKeysOutputFixtureBindings = {{
+    "unsorted_keys",
+    "unsorted_gauss_idx",
+}};
+
+inline constexpr std::array<const char *, 1> kComputeTileRangesOutputFixtureBindings = {{
+    "tile_ranges",
+}};
+
+inline constexpr std::array<const char *, 2> kRadixSortOutputFixtureBindings = {{
+    "sorted_keys",
+    "sorted_gauss_idx",
+}};
+
+inline constexpr std::array<const char *, 0> kNoExactGoldenOutputFixtureBindings = {};
+
+inline constexpr std::array<FixtureBindingContract, 10> kFixtureBindingContracts = {{
     {"radix_sort_pipeline", make_span(kRadixSortPipelineFixtureBindings)},
     {"cumsum_multi_block", make_span(kCumsumMultiBlockFixtureBindings)},
     {"cumsum_multi_block_two_level", make_span(kCumsumTwoLevelFixtureBindings)},
+    {"cumsum_output", make_span(kOutputFixtureBindings)},
+    {"sum_output", make_span(kOutputFixtureBindings)},
+    {"where_output", make_span(kWhereOutputFixtureBindings)},
+    {"generate_keys_output", make_span(kGenerateKeysOutputFixtureBindings)},
+    {"compute_tile_ranges_output", make_span(kComputeTileRangesOutputFixtureBindings)},
+    {"radix_sort_output", make_span(kRadixSortOutputFixtureBindings)},
+    {"no_exact_golden_outputs", make_span(kNoExactGoldenOutputFixtureBindings)},
 }};
 // clang-format on
 

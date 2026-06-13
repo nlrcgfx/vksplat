@@ -49,6 +49,7 @@ DTYPE_FORMATS = {
 }
 
 GENERATED_SUBDIRS = ("fixtures", "golden_masters")
+DEFAULT_BINDING_CONTRACTS = SCRIPT_PATH.with_name("shader_binding_contracts.json")
 
 # Keep this list to constants this generator directly mirrors. When Phase 4/5
 # fixtures hardcode SSIM or tensor-backward values, add those mirrors here.
@@ -85,15 +86,101 @@ class BufferData:
 class FixtureCase:
     stage_name: str
     subgraph: str
-    fixture_bindings: tuple[str, ...]
     fixture_buffers: tuple[BufferData, ...]
-    golden_bindings: tuple[str, ...]
     golden_buffers: tuple[BufferData, ...]
     fixture_notes: str
     golden_notes: str
     emulate_int64: int = 0
     profile_agnostic: bool = True
     uniforms: dict[str, int | float | list[float]] | None = None
+
+
+BindingContracts = dict[str, dict[str, tuple[str, ...]]]
+
+
+def load_binding_contracts(path: Path = DEFAULT_BINDING_CONTRACTS) -> BindingContracts:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("schema") != 1:
+        raise ValueError(f"{path}: unsupported shader binding contract schema")
+
+    contracts: BindingContracts = {"shaders": {}, "fixture_contracts": {}}
+    for group in contracts:
+        source = raw.get(group)
+        if not isinstance(source, dict):
+            raise ValueError(f"{path}: missing {group} binding contracts")
+        for name, bindings in source.items():
+            if not isinstance(name, str) or not isinstance(bindings, list) or not all(
+                isinstance(binding, str) for binding in bindings
+            ):
+                raise ValueError(f"{path}: invalid {group} contract for {name!r}")
+            contracts[group][name] = tuple(bindings)
+    return contracts
+
+
+def binding_contract_names(contracts: BindingContracts, group: str, name: str) -> tuple[str, ...]:
+    try:
+        return contracts[group][name]
+    except KeyError as exc:
+        raise ValueError(f"missing {group} binding contract: {name}") from exc
+
+
+def fixture_binding_route(case: FixtureCase) -> tuple[str, str] | None:
+    if case.subgraph == "harness":
+        return None
+    if case.subgraph == "projection" and case.stage_name.startswith("projection_forward_"):
+        return ("shaders", "projection_forward")
+    if case.subgraph == "generate_keys" and case.stage_name.startswith("generate_keys_"):
+        return ("shaders", "generate_keys")
+    if case.subgraph == "compute_tile_ranges" and case.stage_name.startswith("compute_tile_ranges"):
+        return ("shaders", "compute_tile_ranges")
+    if case.subgraph == "rasterize_forward" and case.stage_name.startswith("rasterize_forward_"):
+        return ("shaders", "rasterize_forward")
+    if case.subgraph == "radix_sort" and case.stage_name.startswith("radix_sort_"):
+        return ("fixture_contracts", "radix_sort_pipeline")
+    if case.subgraph == "utility":
+        if case.stage_name in ("cumsum_multi_block", "cumsum_multi_block_two_level"):
+            return ("fixture_contracts", case.stage_name)
+        if case.stage_name == "sum" or case.stage_name.startswith("sum_"):
+            return ("shaders", "sum")
+        if case.stage_name == "where" or case.stage_name.startswith("where_"):
+            return ("shaders", "where")
+        if case.stage_name == "cumsum_single_pass" or case.stage_name.startswith("cumsum_single_pass_"):
+            return ("shaders", "cumsum_single_pass")
+    raise ValueError(f"{case.stage_name}: no fixture binding contract route")
+
+
+def golden_binding_route(case: FixtureCase) -> tuple[str, str] | None:
+    if case.subgraph == "harness":
+        return None
+    if case.subgraph == "projection" and case.stage_name.startswith("projection_forward_"):
+        return ("fixture_contracts", "no_exact_golden_outputs")
+    if case.subgraph == "generate_keys" and case.stage_name.startswith("generate_keys_"):
+        return ("fixture_contracts", "generate_keys_output")
+    if case.subgraph == "compute_tile_ranges" and case.stage_name.startswith("compute_tile_ranges"):
+        return ("fixture_contracts", "compute_tile_ranges_output")
+    if case.subgraph == "rasterize_forward" and case.stage_name.startswith("rasterize_forward_"):
+        return ("fixture_contracts", "no_exact_golden_outputs")
+    if case.subgraph == "radix_sort" and case.stage_name.startswith("radix_sort_"):
+        return ("fixture_contracts", "radix_sort_output")
+    if case.subgraph == "utility":
+        if case.stage_name == "sum" or case.stage_name.startswith("sum_"):
+            return ("fixture_contracts", "sum_output")
+        if case.stage_name == "where" or case.stage_name.startswith("where_"):
+            return ("fixture_contracts", "where_output")
+        if case.stage_name.startswith("cumsum_"):
+            return ("fixture_contracts", "cumsum_output")
+    raise ValueError(f"{case.stage_name}: no golden binding contract route")
+
+
+def routed_binding_names(
+    case: FixtureCase,
+    contracts: BindingContracts,
+    route: tuple[str, str] | None,
+) -> tuple[str, ...]:
+    if route is None:
+        return ()
+    group, name = route
+    return binding_contract_names(contracts, group, name)
 
 
 def element_count(shape: Iterable[int]) -> int:
@@ -219,13 +306,11 @@ def cumsum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCa
     return FixtureCase(
         stage_name=stage_name,
         subgraph="utility",
-        fixture_bindings=("input", "output", "block_sums"),
         fixture_buffers=(
             buffer_data("input", "int32", input_values),
             buffer_data("output", "int32", [0] * len(input_values)),
             buffer_data("block_sums", "int32", [0]),
         ),
-        golden_bindings=("output",),
         golden_buffers=(buffer_data("output", "int32", expected),),
         fixture_notes=f"Synthetic utility fixture for {notes}",
         golden_notes=f"Synthetic utility golden for {notes}",
@@ -241,19 +326,15 @@ def cumsum_multi_block_case(stage_name: str, values: Iterable[int], notes: str, 
         buffer_data("output", "int32", [0] * len(input_values)),
         buffer_data("block_sums", "int32", [0] * block_sums_count),
     ]
-    bindings = ["input", "output", "block_sums"]
 
     if two_level:
         block_sums2_count = (block_sums_count + CUMSUM_BLOCK_SIZE - 1) // CUMSUM_BLOCK_SIZE
         buffers.append(buffer_data("block_sums2", "int32", [0] * block_sums2_count))
-        bindings.append("block_sums2")
 
     return FixtureCase(
         stage_name=stage_name,
         subgraph="utility",
-        fixture_bindings=tuple(bindings),
         fixture_buffers=tuple(buffers),
-        golden_bindings=("output",),
         golden_buffers=(buffer_data("output", "int32", expected),),
         fixture_notes=f"Synthetic utility fixture for {notes}",
         golden_notes=f"Synthetic utility golden for {notes}",
@@ -265,12 +346,10 @@ def sum_case(stage_name: str, values: Iterable[int], notes: str) -> FixtureCase:
     return FixtureCase(
         stage_name=stage_name,
         subgraph="utility",
-        fixture_bindings=("input", "output"),
         fixture_buffers=(
             buffer_data("input", "int32", input_values),
             buffer_data("output", "int32", [0]),
         ),
-        golden_bindings=("output",),
         golden_buffers=(buffer_data("output", "int32", [sum(input_values)]),),
         fixture_notes=f"Synthetic utility fixture for {notes}",
         golden_notes=f"Synthetic utility golden for {notes}",
@@ -285,13 +364,11 @@ def where_case(stage_name: str, mask: Iterable[int], initial_fill: int, notes: s
     return FixtureCase(
         stage_name=stage_name,
         subgraph="utility",
-        fixture_bindings=("mask", "mask_cumsum", "out_indices"),
         fixture_buffers=(
             buffer_data("mask", "int32", mask_values),
             buffer_data("mask_cumsum", "int32", mask_cumsum(mask_values)),
             buffer_data("out_indices", "int32", [initial_fill] * output_len),
         ),
-        golden_bindings=("out_indices",),
         golden_buffers=(buffer_data("out_indices", "int32", expected),),
         fixture_notes=f"Synthetic utility fixture for {notes}",
         golden_notes=f"Synthetic utility golden for {notes}",
@@ -314,14 +391,6 @@ def radix_sort_case(stage_name: str, keys: Iterable[int], notes: str) -> Fixture
     return FixtureCase(
         stage_name=stage_name,
         subgraph="radix_sort",
-        fixture_bindings=(
-            "sorting_keys_1",
-            "sorting_gauss_idx_1",
-            "sorting_keys_2",
-            "sorting_gauss_idx_2",
-            "_sorting_histogram",
-            "_sorting_histogram_cumsum",
-        ),
         fixture_buffers=(
             buffer_data("sorting_keys_1", "uint32", key_values),
             buffer_data("sorting_gauss_idx_1", "uint32", indices),
@@ -330,7 +399,6 @@ def radix_sort_case(stage_name: str, keys: Iterable[int], notes: str) -> Fixture
             buffer_data("_sorting_histogram", "uint32", [0] * (RADIX_SORT_PASSES * RADIX_SORT_RADIX)),
             buffer_data("_sorting_histogram_cumsum", "uint32", [0] * (num_parts * RADIX_SORT_RADIX)),
         ),
-        golden_bindings=("sorted_keys", "sorted_gauss_idx"),
         golden_buffers=(
             buffer_data("sorted_keys", "uint32", sorted_keys),
             buffer_data("sorted_gauss_idx", "uint32", sorted_gauss_idx),
@@ -352,19 +420,6 @@ def projection_forward_case(stage_name: str, emulate_int64: int, visible: bool =
     return FixtureCase(
         stage_name=stage_name,
         subgraph="projection",
-        fixture_bindings=(
-            "xyz_ws",
-            "sh_coeffs",
-            "rotations",
-            "scales_opacs",
-            "tiles_touched",
-            "rect_tile_space",
-            "radii",
-            "xy_vs",
-            "depths",
-            "inv_cov_vs_opacity",
-            "rgb",
-        ),
         fixture_buffers=(
             BufferData("xyz_ws", "float32", (1, 3), xyz_ws),
             BufferData("sh_coeffs", "float32", (12 * SH_REORDER_SIZE, 4), tuple(sh_coeffs)),
@@ -378,7 +433,6 @@ def projection_forward_case(stage_name: str, emulate_int64: int, visible: bool =
             BufferData("inv_cov_vs_opacity", "float32", (1, 4), (0.0, 0.0, 0.0, 0.0)),
             BufferData("rgb", "float32", (1, 3), (0.0, 0.0, 0.0)),
         ),
-        golden_bindings=(),
         golden_buffers=(),
         fixture_notes=(
             f"Synthetic projection_forward invariant fixture for {visibility_note} using "
@@ -488,15 +542,6 @@ def generate_keys_case(stage_name: str, emulate_int64: int) -> FixtureCase:
     return FixtureCase(
         stage_name=stage_name,
         subgraph="generate_keys",
-        fixture_bindings=(
-            "xy_vs",
-            "inv_cov_vs_opacity",
-            "depths",
-            "rect_tile_space",
-            "index_buffer_offset",
-            "unsorted_keys",
-            "unsorted_gauss_idx",
-        ),
         fixture_buffers=(
             BufferData("xy_vs", "float32", (num_splats, 2), xy_vs),
             BufferData("inv_cov_vs_opacity", "float32", (num_splats, 4), inv_cov_vs_opacity),
@@ -507,7 +552,6 @@ def generate_keys_case(stage_name: str, emulate_int64: int) -> FixtureCase:
             BufferData("unsorted_keys", "uint32", (num_indices,), [0] * num_indices),
             BufferData("unsorted_gauss_idx", "int32", (num_indices,), [0] * num_indices),
         ),
-        golden_bindings=("unsorted_keys", "unsorted_gauss_idx"),
         golden_buffers=(
             BufferData("unsorted_keys", "uint32", (num_indices,), tuple(expected_keys)),
             BufferData("unsorted_gauss_idx", "int32", (num_indices,), tuple(expected_indices)),
@@ -580,12 +624,10 @@ def compute_tile_ranges_case() -> FixtureCase:
     return FixtureCase(
         stage_name="compute_tile_ranges",
         subgraph="compute_tile_ranges",
-        fixture_bindings=("sorted_keys", "tile_ranges"),
         fixture_buffers=(
             BufferData("sorted_keys", "uint32", (len(sorted_keys),), sorted_keys),
             BufferData("tile_ranges", "int32", (num_tiles + 1,), [-1] * (num_tiles + 1)),
         ),
-        golden_bindings=("tile_ranges",),
         golden_buffers=(BufferData("tile_ranges", "int32", (num_tiles + 1,), tuple(tile_ranges)),),
         fixture_notes=(
             "Synthetic compute_tile_ranges fixture with a 3x2 tile grid, duplicate tile entries, "
@@ -681,15 +723,6 @@ def rasterize_forward_case(
     return FixtureCase(
         stage_name=stage_name,
         subgraph="rasterize_forward",
-        fixture_bindings=(
-            "sorted_gauss_idx",
-            "tile_ranges",
-            "xy_vs",
-            "inv_cov_vs_opacity",
-            "rgb",
-            "pixel_state",
-            "n_contributors",
-        ),
         fixture_buffers=(
             BufferData("sorted_keys", "uint32", (len(sorted_keys),), sorted_keys),
             BufferData("sorted_gauss_idx", "int32", (num_splats,), tuple(range(num_splats))),
@@ -700,7 +733,6 @@ def rasterize_forward_case(
             BufferData("pixel_state", "float32", (image_height, image_width, 4), [-1.0] * (num_pixels * 4)),
             BufferData("n_contributors", "int32", (image_height, image_width), [-1] * num_pixels),
         ),
-        golden_bindings=(),
         golden_buffers=(),
         fixture_notes=(
             f"Synthetic rasterize_forward invariant fixture for {notes}; sorted_keys are included "
@@ -778,9 +810,7 @@ def fixture_cases() -> tuple[FixtureCase, ...]:
         FixtureCase(
             stage_name="harness_smoke",
             subgraph="harness",
-            fixture_bindings=(),
             fixture_buffers=(buffer_data("input_a", "float32", [1.0, 2.0, 3.0, 4.0]),),
-            golden_bindings=(),
             golden_buffers=(buffer_data("output_a", "float32", [1.0, 2.0, 3.0, 4.0], epsilon=1e-5),),
             fixture_notes="Synthetic harness fixture for loader tests",
             golden_notes="Synthetic golden for harness compare helpers",
@@ -908,25 +938,28 @@ def write_manifest(path: Path, manifest: dict) -> None:
     path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
-def write_case(root: Path, case: FixtureCase) -> None:
+def write_case(root: Path, case: FixtureCase, contracts: BindingContracts) -> None:
     stage_path = stage_relpath(case.stage_name, case.subgraph)
     fixture_dir = root / "fixtures" / stage_path
     golden_dir = root / "golden_masters" / stage_path
     fixture_dir.mkdir(parents=True, exist_ok=True)
     golden_dir.mkdir(parents=True, exist_ok=True)
 
+    fixture_bindings = routed_binding_names(case, contracts, fixture_binding_route(case))
+    golden_bindings = routed_binding_names(case, contracts, golden_binding_route(case))
+
     for buffer in case.fixture_buffers:
         write_binary(fixture_dir / buffer.file_name, buffer)
     write_manifest(
         fixture_dir / "manifest.json",
-        manifest_for(case, case.fixture_buffers, case.fixture_bindings, case.fixture_notes),
+        manifest_for(case, case.fixture_buffers, fixture_bindings, case.fixture_notes),
     )
 
     for buffer in case.golden_buffers:
         write_binary(golden_dir / buffer.file_name, buffer)
     write_manifest(
         golden_dir / "manifest.json",
-        manifest_for(case, case.golden_buffers, case.golden_bindings, case.golden_notes),
+        manifest_for(case, case.golden_buffers, golden_bindings, case.golden_notes),
     )
 
 
@@ -937,10 +970,10 @@ def clean_generated_dirs(root: Path) -> None:
             shutil.rmtree(path)
 
 
-def generate(root: Path) -> None:
+def generate(root: Path, contracts: BindingContracts) -> None:
     clean_generated_dirs(root)
     for case in fixture_cases():
-        write_case(root, case)
+        write_case(root, case, contracts)
 
 
 def generated_files(root: Path) -> set[Path]:
@@ -1011,7 +1044,7 @@ def report_config_mirror_problems(problems: list[str]) -> None:
         print(f"  {problem}", file=sys.stderr)
 
 
-def check(root: Path) -> int:
+def check(root: Path, contracts: BindingContracts) -> int:
     mirror_problems = verify_config_mirrors()
     if mirror_problems:
         report_config_mirror_problems(mirror_problems)
@@ -1019,7 +1052,7 @@ def check(root: Path) -> int:
 
     with tempfile.TemporaryDirectory(prefix="nlrc_vksplat_fixtures_") as temp:
         expected_root = Path(temp) / "test_data"
-        generate(expected_root)
+        generate(expected_root, contracts)
         problems = compare_generated(root, expected_root)
 
     if not problems:
@@ -1041,19 +1074,26 @@ def main() -> int:
     mode.add_argument("--write", action="store_true", help="Regenerate committed fixture and golden files")
     mode.add_argument("--check", action="store_true", help="Check committed files against generated output")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent, help="test_data root directory")
+    parser.add_argument(
+        "--binding-contracts",
+        type=Path,
+        default=DEFAULT_BINDING_CONTRACTS,
+        help="Registry-exported shader binding contract JSON",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
+    contracts = load_binding_contracts(args.binding_contracts.resolve())
     if args.write:
         mirror_problems = verify_config_mirrors()
         if mirror_problems:
             report_config_mirror_problems(mirror_problems)
             return 1
-        generate(root)
+        generate(root, contracts)
         print(f"[OK] Wrote fixture data under {root}")
         return 0
     if args.check:
-        return check(root)
+        return check(root, contracts)
     raise AssertionError("unreachable")
 
 

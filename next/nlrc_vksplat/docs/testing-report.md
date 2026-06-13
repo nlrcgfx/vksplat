@@ -76,9 +76,9 @@ config mirror drift and fixture byte drift are validated by CTest when
 | Area | Tag | What is tested | Test entrypoints | Covered behavior |
 |------|-----|----------------|------------------|------------------|
 | Test harness | `[host]` | Catch2 executable and CTest discovery | `test_main.cpp`, `tests/CMakeLists.txt` | Test binary links, Catch2 test cases are discovered, generator drift is registered as a separate CTest. |
-| Fixture generator | `[host]` | Synthetic fixture reproducibility and config mirrors | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check` | Fixture-sensitive Python constants match evaluated `VKSPLAT_*` values from `nlrc_vksplat_config.hpp`; generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte. |
+| Fixture generator | `[host]` | Synthetic fixture reproducibility, config mirrors, and binding contract drift | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check`, `test_data/shader_binding_contracts.json` | Fixture-sensitive Python constants match evaluated `VKSPLAT_*` values from `nlrc_vksplat_config.hpp`; generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte; generated manifest `bindings[]` are derived from the registry-exported binding contract JSON. |
 | Fixture catalog | `[host]` | Whole catalog validity | `test_fixture_catalog.cpp` | Every fixture/golden manifest loads, stage names match directories, build profile matches, bindings reference buffers, files exist, and file sizes match dtype/shape. |
-| Shader descriptor registry | `[host]` | Host-side logical shader interface contracts | `test_shader_descriptors.cpp`, `shader_descriptors.hpp`, `shader_binding_resolver.hpp`, `shader_fixture_mapping.cpp`, `shader_manifest.json` | Ported logical shaders expose fixed binding order/count, push-constant size, dispatch metadata, and source linkage; compile-time checks keep registry-derived dispatch storage-binding helpers aligned with registry bindings; generated shader jobs match registry source paths and defines; fixture manifest bindings match registry or explicit composite-helper contracts. |
+| Shader descriptor registry | `[host]` | Host-side logical shader interface contracts | `test_shader_descriptors.cpp`, `shader_descriptors.hpp`, `shader_binding_resolver.hpp`, `shader_fixture_mapping.cpp`, `shader_manifest.json` | Ported logical shaders expose fixed binding order/count, push-constant size, dispatch metadata, and source linkage; compile-time checks keep typed storage-binding helpers aligned with registry binding names and struct field order; generated shader jobs match registry source paths and defines; fixture and golden manifest bindings match registry or explicit composite/output contracts. |
 | Manifest parser | `[host]` | Manifest fields and rejection paths | `test_fixture_loader.cpp`, `fixture_manifest.cpp` | Supported dtype parsing, dtype sizes, invalid dtype rejection, malformed JSON rejection, empty or invalid shape rejection. |
 | Fixture loader | `[host]` | Typed raw-buffer loading | `test_fixture_loader.cpp`, `fixture_loader.cpp` | Typed float loading, missing buffer names, missing files, dtype mismatch, size mismatch, empty shape guards, little-endian `int32` payloads. |
 | Golden comparison | `[host]` | Float result comparison helpers | `test_golden_compare.cpp`, `golden_compare.cpp` | Epsilon pass/fail behavior, size mismatch diagnostics, NaN and infinity rejection. |
@@ -101,6 +101,9 @@ fixtures available to CTest while making the source values reviewable and reprod
 
 Per-buffer values and shader binding names live in [`test_data/README.md`](../../../test_data/README.md).
 All listed fixtures use synthetic invariant oracles unless noted otherwise in the catalog.
+Manifest binding arrays are generated from
+[`test_data/shader_binding_contracts.json`](../../../test_data/shader_binding_contracts.json),
+which is checked against the C++ shader descriptor registry by `test_shader_descriptors.cpp`.
 
 ### Generated data assumptions
 
@@ -316,6 +319,7 @@ Required checks when changing tests, fixtures, or documented coverage.
 
 - New public test helper behavior should have at least one host test.
 - New generated fixture data must come from `test_data/generate_fixtures.py` or document why it is curated separately.
+- New generated fixture or golden stages must route through the shader registry, a named fixture contract, or an explicit untracked path.
 - Any change to `VKSPLAT_*_BLOCK_SIZE`, `VKSPLAT_RADIX_*`, or `VKSPLAT_SORTING_KEY_BITS` must be reviewed as a fixture catalog change and followed by fixture regeneration plus drift checking.
 - When new generated fixtures hardcode additional `VKSPLAT_*` values, add those Python constants to the fixture generator mirror guard in the same change.
 - New shader dispatch contracts should include descriptor order, push constants, fixture inputs, and expected outputs.

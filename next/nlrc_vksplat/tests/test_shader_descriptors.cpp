@@ -14,14 +14,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <nlohmann/json.hpp>
-
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
 #include "gpu/shader_binding_resolver.hpp"
 #include "gpu/shader_descriptors.hpp"
 #include "gpu/shader_execution.hpp"
 #include "shader_fixture_mapping.hpp"
+
+#include <nlohmann/json.hpp>
 
 using namespace nlrc::vksplat;
 
@@ -42,6 +42,24 @@ struct ExpectedShader final {
     throw std::runtime_error("could not open generated shader manifest: " + manifest_path.string());
   }
   return nlohmann::json::parse(input);
+}
+
+[[nodiscard]] nlohmann::json load_shader_binding_contracts() {
+  const auto manifest_path = tests::test_data_root() / "shader_binding_contracts.json";
+  std::ifstream input(manifest_path);
+  if (!input.is_open()) {
+    throw std::runtime_error("could not open shader binding contracts: " + manifest_path.string());
+  }
+  return nlohmann::json::parse(input);
+}
+
+[[nodiscard]] std::vector<std::string> json_string_array(const nlohmann::json &value) {
+  std::vector<std::string> strings;
+  strings.reserve(value.size());
+  for (const auto &item : value) {
+    strings.push_back(item.get<std::string>());
+  }
+  return strings;
 }
 
 [[nodiscard]] std::string manifest_source_path(const nlohmann::json &module) {
@@ -299,32 +317,72 @@ TEST_CASE("Shader descriptors preserve dispatch binding order", "[host]") {
   // clang-format on
 }
 
-TEST_CASE("Fixture catalog bindings match shader descriptor registry", "[host]") {
-  std::size_t checked_fixtures = 0;
+TEST_CASE("Shader descriptor binding contract export matches descriptor registry", "[host]") {
+  const auto contracts = load_shader_binding_contracts();
 
-  for (const auto &manifest_path : manifest_paths_under(tests::test_data_root() / "fixtures")) {
-    const auto manifest = tests::load_fixture_manifest(manifest_path);
-    INFO("manifest: " << manifest_path.string());
-    INFO("stage: " << manifest.stage_name);
+  REQUIRE(contracts.at("schema").get<int>() == 1);
 
-    if (const auto *shader = tests::shader_interface_for_fixture(manifest); shader != nullptr) {
-      REQUIRE(manifest.bindings == gpu::binding_names(*shader));
-      ++checked_fixtures;
-      continue;
-    }
-
-    if (const auto *contract = tests::fixture_contract_for_manifest(manifest); contract != nullptr) {
-      REQUIRE(manifest.bindings == gpu::binding_names(*contract));
-      ++checked_fixtures;
-      continue;
-    }
-
-    if (tests::fixture_is_intentionally_untracked(manifest)) {
-      continue;
-    }
-
-    FAIL("Fixture has no shader descriptor or composite fixture binding contract");
+  const auto &shaders = contracts.at("shaders");
+  REQUIRE(shaders.size() == gpu::shader_interfaces().size());
+  const auto registry_shaders = gpu::shader_interfaces();
+  for (std::size_t index = 0; index < registry_shaders.size(); ++index) {
+    const auto &shader = registry_shaders[index];
+    INFO("shader: " << shader.logical_name);
+    REQUIRE(shaders.contains(shader.logical_name));
+    REQUIRE(json_string_array(shaders.at(shader.logical_name)) == gpu::binding_names(shader));
   }
 
-  REQUIRE(checked_fixtures > 0);
+  const auto &fixture_contracts = contracts.at("fixture_contracts");
+  REQUIRE(fixture_contracts.size() == gpu::fixture_binding_contracts().size());
+  const auto registry_contracts = gpu::fixture_binding_contracts();
+  for (std::size_t index = 0; index < registry_contracts.size(); ++index) {
+    const auto &contract = registry_contracts[index];
+    INFO("fixture contract: " << contract.name);
+    REQUIRE(fixture_contracts.contains(contract.name));
+    REQUIRE(json_string_array(fixture_contracts.at(contract.name)) == gpu::binding_names(contract));
+  }
+}
+
+TEST_CASE("Fixture catalog and golden bindings match shader descriptor registry", "[host]") {
+  struct Root final {
+    const char *name;
+    std::filesystem::path path;
+    tests::FixtureManifestSide side;
+  };
+
+  const std::array roots = {
+      Root{"fixtures", tests::test_data_root() / "fixtures", tests::FixtureManifestSide::Fixture},
+      Root{"golden_masters", tests::test_data_root() / "golden_masters", tests::FixtureManifestSide::Golden},
+  };
+
+  std::size_t checked_manifests = 0;
+
+  for (const auto &root : roots) {
+    for (const auto &manifest_path : manifest_paths_under(root.path)) {
+      const auto manifest = tests::load_fixture_manifest(manifest_path);
+      INFO("root: " << root.name);
+      INFO("manifest: " << manifest_path.string());
+      INFO("stage: " << manifest.stage_name);
+
+      if (const auto *shader = tests::shader_interface_for_fixture(manifest, root.side); shader != nullptr) {
+        REQUIRE(manifest.bindings == gpu::binding_names(*shader));
+        ++checked_manifests;
+        continue;
+      }
+
+      if (const auto *contract = tests::fixture_contract_for_manifest(manifest, root.side); contract != nullptr) {
+        REQUIRE(manifest.bindings == gpu::binding_names(*contract));
+        ++checked_manifests;
+        continue;
+      }
+
+      if (tests::fixture_is_intentionally_untracked(manifest)) {
+        continue;
+      }
+
+      FAIL("Manifest has no shader descriptor or fixture binding contract");
+    }
+  }
+
+  REQUIRE(checked_manifests > 0);
 }
