@@ -3,4 +3,5 @@ InheritParentConfig: true
 Checks: >
   -bugprone-throwing-static-initialization,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-  -clang-analyzer-optin.core.EnumCastOutOfRange
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -readability-function-cognitive-complexity

@@ -31,7 +31,6 @@ namespace {
   return paths;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void validate_manifest_file(const std::filesystem::path &manifest_path) {
   INFO("manifest: " << manifest_path.string());
 

@@ -61,7 +61,6 @@ static_assert(VKSPLAT_SORTING_KEY_BITS == 32, "Update compute_tile_ranges tests 
   };
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_valid_tile_ranges(const std::vector<std::int32_t> &tile_ranges,
                                const std::vector<std::uint32_t> &sorted_keys) {
   const auto num_indices = static_cast<std::int32_t>(sorted_keys.size());

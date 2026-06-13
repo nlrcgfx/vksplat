@@ -105,7 +105,6 @@ pixel_at(const std::vector<float> &pixel_state, std::uint32_t image_width, std::
   return n_contributors[index];
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_valid_sorted_ranges(const std::vector<std::uint32_t> &sorted_keys,
                                  const std::vector<std::int32_t> &sorted_gauss_idx,
                                  const std::vector<std::int32_t> &tile_ranges,
@@ -140,7 +139,6 @@ void require_valid_sorted_ranges(const std::vector<std::uint32_t> &sorted_keys,
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_output_invariants(const std::vector<float> &pixel_state,
                                const std::vector<std::int32_t> &n_contributors,
                                std::size_t num_indices) {
@@ -159,7 +157,6 @@ void require_output_invariants(const std::vector<float> &pixel_state,
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_empty_tile_centers_are_baseline(const std::vector<float> &pixel_state,
                                              const std::vector<std::int32_t> &n_contributors,
                                              const std::vector<std::int32_t> &tile_ranges,
@@ -185,7 +182,6 @@ void require_empty_tile_centers_are_baseline(const std::vector<float> &pixel_sta
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_splat_centers_have_contribution(const std::vector<float> &pixel_state,
                                              const std::vector<std::int32_t> &n_contributors,
                                              const std::vector<float> &xy_vs,

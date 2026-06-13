@@ -116,7 +116,6 @@ contributor_at(const std::vector<std::int32_t> &n_contributors, std::uint32_t x,
   return n_contributors[index];
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_valid_tile_ranges(const std::vector<std::int32_t> &tile_ranges,
                                const std::vector<std::uint32_t> &sorted_keys) {
   const auto num_tiles = static_cast<std::size_t>(kGridHeight) * kGridWidth;
@@ -144,7 +143,6 @@ void require_valid_tile_ranges(const std::vector<std::int32_t> &tile_ranges,
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void require_pixel_invariants(const std::vector<float> &pixel_state,
                               const std::vector<std::int32_t> &n_contributors,
                               std::size_t num_indices) {
