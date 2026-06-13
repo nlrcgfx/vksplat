@@ -60,6 +60,7 @@ add_library(nlrc_vksplat_test_support STATIC
   support/golden_compare.cpp
   support/gpu_available.cpp
   support/manifest_profile.cpp
+  support/shader_fixture_mapping.cpp
 )
 
 target_include_directories(nlrc_vksplat_test_support PUBLIC support)

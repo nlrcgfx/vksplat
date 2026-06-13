@@ -84,7 +84,7 @@ struct ShaderDefineDescriptor final {
 struct ShaderSourceDescriptor final {
   const char *path{};
   const char *language{};
-  Span<const ShaderDefineDescriptor> defines{};
+  Span<const ShaderDefineDescriptor> defines;
 };
 
 struct ShaderDispatchDescriptor final {
@@ -95,7 +95,7 @@ struct ShaderDispatchDescriptor final {
 struct ShaderInterface final {
   ShaderId id{};
   const char *logical_name{};
-  Span<const ShaderBindingDescriptor> bindings{};
+  Span<const ShaderBindingDescriptor> bindings;
   std::uint32_t binding_count{};
   const char *push_constant_type{};
   std::size_t push_constant_size{};
@@ -106,7 +106,7 @@ struct ShaderInterface final {
 
 struct FixtureBindingContract final {
   const char *name{};
-  Span<const char *const> bindings{};
+  Span<const char *const> bindings;
 };
 
 namespace detail {
@@ -205,6 +205,47 @@ inline constexpr const char *kRadixSortProfileNotes =
 
 } // namespace detail
 
+template <ShaderId Id>
+struct ShaderBindingTraits;
+
+// clang-format off
+#define NLRC_VKSPLAT_SHADER_BINDING_TRAITS(shader_id, binding_array) \
+  template <> \
+  struct ShaderBindingTraits<ShaderId::shader_id> final { \
+    static constexpr std::size_t binding_count = detail::binding_array.size(); \
+ \
+    [[nodiscard]] static constexpr Span<const ShaderBindingDescriptor> bindings() { \
+      return make_span(detail::binding_array); \
+    } \
+  }
+
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(CumsumSinglePass, kCumsumBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(CumsumBlockScan, kCumsumBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(CumsumScanBlockSums, kCumsumBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(CumsumAddBlockOffsets, kCumsumBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(Sum, kSumBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(Where, kWhereBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(ProjectionForward, kProjectionForwardBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(GenerateKeys, kGenerateKeysBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(ComputeTileRanges, kComputeTileRangesBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(RasterizeForward, kRasterizeForwardBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(RadixSortUpsweep, kRadixSortUpsweepBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(RadixSortSpine, kRadixSortSpineBindings);
+NLRC_VKSPLAT_SHADER_BINDING_TRAITS(RadixSortDownsweep, kRadixSortDownsweepBindings);
+
+#undef NLRC_VKSPLAT_SHADER_BINDING_TRAITS
+// clang-format on
+
+template <ShaderId Id>
+// NOLINTNEXTLINE(readability-identifier-naming)
+inline constexpr std::size_t shader_binding_count_v = ShaderBindingTraits<Id>::binding_count;
+
+template <ShaderId Id, std::size_t Index>
+[[nodiscard]] constexpr const char *shader_binding_name() {
+  static_assert(Index < shader_binding_count_v<Id>, "Shader binding index is out of range");
+  return ShaderBindingTraits<Id>::bindings()[Index].name;
+}
+
 inline constexpr std::uint32_t kCumsumDescriptorBindingCount =
     static_cast<std::uint32_t>(detail::kCumsumBindings.size());
 inline constexpr std::uint32_t kSumDescriptorBindingCount = static_cast<std::uint32_t>(detail::kSumBindings.size());
@@ -226,6 +267,7 @@ inline constexpr std::uint32_t kRadixSortDownsweepDescriptorBindingCount =
 
 namespace detail {
 
+// clang-format off
 inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
     {
         ShaderId::CumsumSinglePass,
@@ -373,7 +415,9 @@ inline constexpr std::array<ShaderInterface, 13> kShaderInterfaces = {{
         {"shader/radix_sort/downsweep.comp", "glsl", make_span(kNoDefines)},
     },
 }};
+// clang-format on
 
+// clang-format off
 inline constexpr std::array<const char *, 6> kRadixSortPipelineFixtureBindings = {{
     "sorting_keys_1",
     "sorting_gauss_idx_1",
@@ -401,8 +445,38 @@ inline constexpr std::array<FixtureBindingContract, 3> kFixtureBindingContracts 
     {"cumsum_multi_block", make_span(kCumsumMultiBlockFixtureBindings)},
     {"cumsum_multi_block_two_level", make_span(kCumsumTwoLevelFixtureBindings)},
 }};
+// clang-format on
 
 } // namespace detail
+
+[[nodiscard]] constexpr Span<const ShaderBindingDescriptor> shader_binding_descriptors(ShaderId id) noexcept {
+  switch (id) {
+    case ShaderId::CumsumSinglePass:
+    case ShaderId::CumsumBlockScan:
+    case ShaderId::CumsumScanBlockSums:
+    case ShaderId::CumsumAddBlockOffsets:
+      return make_span(detail::kCumsumBindings);
+    case ShaderId::Sum:
+      return make_span(detail::kSumBindings);
+    case ShaderId::Where:
+      return make_span(detail::kWhereBindings);
+    case ShaderId::ProjectionForward:
+      return make_span(detail::kProjectionForwardBindings);
+    case ShaderId::GenerateKeys:
+      return make_span(detail::kGenerateKeysBindings);
+    case ShaderId::ComputeTileRanges:
+      return make_span(detail::kComputeTileRangesBindings);
+    case ShaderId::RasterizeForward:
+      return make_span(detail::kRasterizeForwardBindings);
+    case ShaderId::RadixSortUpsweep:
+      return make_span(detail::kRadixSortUpsweepBindings);
+    case ShaderId::RadixSortSpine:
+      return make_span(detail::kRadixSortSpineBindings);
+    case ShaderId::RadixSortDownsweep:
+      return make_span(detail::kRadixSortDownsweepBindings);
+  }
+  return {};
+}
 
 [[nodiscard]] inline Span<const ShaderInterface> shader_interfaces() noexcept {
   return make_span(detail::kShaderInterfaces);

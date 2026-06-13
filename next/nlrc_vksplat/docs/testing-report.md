@@ -31,7 +31,7 @@ current test surface, and where future hardening should focus.
 
 - [`test_data/README.md`](../../../test_data/README.md): fixture catalog, exact buffer values, regeneration workflow
 - [`.cursor/rules/rewrite-testing.mdc`](../../../.cursor/rules/rewrite-testing.mdc): oracle types, Catch2 tags, porting workflow
-- [`.cursor/rules/rewrite-buffer-contract.mdc`](../../../.cursor/rules/rewrite-buffer-contract.mdc): descriptor binding order for new shader tests
+- [`.cursor/rules/rewrite-buffer-contract.mdc`](../../../.cursor/rules/rewrite-buffer-contract.mdc): registry-backed descriptor binding contract for new shader tests
 
 ## Purpose and scope
 
@@ -78,7 +78,7 @@ config mirror drift and fixture byte drift are validated by CTest when
 | Test harness | `[host]` | Catch2 executable and CTest discovery | `test_main.cpp`, `tests/CMakeLists.txt` | Test binary links, Catch2 test cases are discovered, generator drift is registered as a separate CTest. |
 | Fixture generator | `[host]` | Synthetic fixture reproducibility and config mirrors | `nlrc_vksplat_fixture_generation_check`, `test_data/generate_fixtures.py --check` | Fixture-sensitive Python constants match evaluated `VKSPLAT_*` values from `nlrc_vksplat_config.hpp`; generated fixture/golden manifests and `.bin` payloads match checked-in files byte-for-byte. |
 | Fixture catalog | `[host]` | Whole catalog validity | `test_fixture_catalog.cpp` | Every fixture/golden manifest loads, stage names match directories, build profile matches, bindings reference buffers, files exist, and file sizes match dtype/shape. |
-| Shader descriptor registry | `[host]` | Host-side logical shader interface contracts | `test_shader_descriptors.cpp`, `shader_descriptors.hpp` | Ported logical shaders expose fixed binding order/count, push-constant size, dispatch metadata, and source linkage; fixture manifest bindings match registry or explicit composite-helper contracts. |
+| Shader descriptor registry | `[host]` | Host-side logical shader interface contracts | `test_shader_descriptors.cpp`, `shader_descriptors.hpp`, `shader_binding_resolver.hpp`, `shader_fixture_mapping.cpp` | Ported logical shaders expose fixed binding order/count, push-constant size, dispatch metadata, and source linkage; compile-time checks keep registry-derived dispatch storage-binding helpers aligned with registry bindings; fixture manifest bindings match registry or explicit composite-helper contracts. |
 | Manifest parser | `[host]` | Manifest fields and rejection paths | `test_fixture_loader.cpp`, `fixture_manifest.cpp` | Supported dtype parsing, dtype sizes, invalid dtype rejection, malformed JSON rejection, empty or invalid shape rejection. |
 | Fixture loader | `[host]` | Typed raw-buffer loading | `test_fixture_loader.cpp`, `fixture_loader.cpp` | Typed float loading, missing buffer names, missing files, dtype mismatch, size mismatch, empty shape guards, little-endian `int32` payloads. |
 | Golden comparison | `[host]` | Float result comparison helpers | `test_golden_compare.cpp`, `golden_compare.cpp` | Epsilon pass/fail behavior, size mismatch diagnostics, NaN and infinity rejection. |

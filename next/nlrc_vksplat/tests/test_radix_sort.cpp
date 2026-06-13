@@ -46,11 +46,17 @@ void require_stable_duplicate_order(const std::vector<std::uint32_t> &keys, cons
 TEST_CASE("Dispatch radix sort pipeline", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
+  // clang-format off
   const std::array<const char *, 7> cases = {
-      "radix_sort_minimum_one",     "radix_sort_single_partition", "radix_sort_partition_boundary",
-      "radix_sort_multi_partition", "radix_sort_duplicates",       "radix_sort_sorted",
+      "radix_sort_minimum_one",
+      "radix_sort_single_partition",
+      "radix_sort_partition_boundary",
+      "radix_sort_multi_partition",
+      "radix_sort_duplicates",
+      "radix_sort_sorted",
       "radix_sort_reverse",
   };
+  // clang-format on
 
   for (const auto *stage_name : cases) {
     INFO("stage: " << stage_name);

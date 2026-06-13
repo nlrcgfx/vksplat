@@ -79,14 +79,16 @@ Per-dispatch workflow: load fixture, upload `StorageBuffer`, bind `StorageBindin
 
 ## Porting Workflow Per Dispatch
 
-1. Add or update synthetic fixture values in `test_data/generate_fixtures.py`, or document why a curated ref-derived fixture is maintained separately.
-2. Regenerate checked-in fixture/golden manifests and `.bin` payloads with `generate_fixtures.py --write`, then verify with `--check`.
-3. Add invariant Catch2 tests where applicable.
-4. Add golden parity tests loading `test_data/golden_masters/...`.
-5. Document fixture and golden meaning in `test_data/README.md`, including exact values for small synthetic buffers.
-6. Update `next/nlrc_vksplat/docs/testing-report.md` for new coverage, changed test behavior, or remaining gaps.
-7. Implement the stage in `next/nlrc_vksplat/` until tests pass.
-8. Only then integrate into the parent subgraph or training path.
+1. Add or update the logical shader entry in `next/nlrc_vksplat/src/gpu/shader_descriptors.hpp`; this is the rewrite binding source of truth.
+2. Add or update the typed storage-binding resolver helper in `shader_binding_resolver.hpp`; helper field order must match the registry entry.
+3. Add fixture catalog routing in `tests/support/shader_fixture_mapping.cpp`, or add an explicit composite fixture contract for host-helper pipelines that are not one logical shader.
+4. Add or update synthetic fixture values in `test_data/generate_fixtures.py`, or document why a curated ref-derived fixture is maintained separately.
+5. Ensure fixture `manifest.json` `bindings[]` matches the registry entry or composite fixture contract, then regenerate checked-in fixture/golden manifests and `.bin` payloads with `generate_fixtures.py --write`.
+6. Verify fixture generation with `generate_fixtures.py --check`; CTest also runs this through `nlrc_vksplat_fixture_generation_check`.
+7. Add invariant Catch2 tests where applicable, and add golden parity tests loading `test_data/golden_masters/...`.
+8. Document fixture and golden meaning in `test_data/README.md`, including exact values for small synthetic buffers.
+9. Update `next/nlrc_vksplat/docs/testing-report.md` for new coverage, changed test behavior, or remaining gaps.
+10. Implement the stage in `next/nlrc_vksplat/` until tests pass, then integrate into the parent subgraph or training path.
 
 ## test_data Layout
 

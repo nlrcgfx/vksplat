@@ -3,7 +3,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -13,6 +12,7 @@
 #include "cumsum_scan_block_sums_spirv.hpp"
 #include "cumsum_single_pass_spirv.hpp"
 #include "generate_keys_spirv.hpp"
+#include "gpu/shader_binding_resolver.hpp"
 #include "projection_forward_spirv.hpp"
 #include "radix_sort_downsweep_spirv.hpp"
 #include "radix_sort_spine_spirv.hpp"
@@ -49,6 +49,21 @@ void require_binding(const StorageBuffer *buffer, const char *name) {
   }
 }
 
+void require_storage_bindings(const ShaderInterface &shader, Span<const NamedStorageBinding> bindings) {
+  for (std::size_t index = 0; index < shader.bindings.size(); ++index) {
+    const auto *buffer = storage_buffer_by_name(bindings, shader.bindings[index].name);
+    require_binding(buffer, shader.bindings[index].name);
+  }
+}
+
+template <ShaderId Id, std::size_t Index>
+[[nodiscard]] const StorageBuffer &storage_binding_at(Span<const NamedStorageBinding> bindings) {
+  constexpr const char *kName = shader_binding_name<Id, Index>();
+  const auto *buffer = storage_buffer_by_name(bindings, kName);
+  require_binding(buffer, kName);
+  return *buffer;
+}
+
 std::uint32_t require_uint32_count(std::size_t count, const char *name) {
   if (count == 0) {
     throw std::invalid_argument(std::string(name) + " must be > 0");
@@ -65,22 +80,13 @@ template <typename T>
   return make_storage_buffer(context, values);
 }
 
-template <typename Resolver>
-[[nodiscard]] std::vector<const StorageBuffer *> resolve_storage_bindings(const ShaderInterface &shader,
-                                                                          Resolver resolver) {
-  std::vector<const StorageBuffer *> buffers;
-  buffers.reserve(shader.binding_count);
-  for (std::size_t index = 0; index < shader.bindings.size(); ++index) {
-    buffers.push_back(resolver(shader.bindings[index].name));
-  }
-  return buffers;
-}
-
 void dispatch_with_element_count(ComputePipeline &pipeline,
-                                 const std::vector<const StorageBuffer *> &bindings,
+                                 const ShaderInterface &shader,
+                                 Span<const NamedStorageBinding> bindings,
                                  std::size_t element_count,
                                  std::uint32_t block_size) {
-  pipeline.bind_storage_buffers(bindings);
+  require_storage_bindings(shader, bindings);
+  pipeline.bind_storage_buffers(resolve_storage_bindings(shader, bindings));
 
   const ElementCountPushConstants push_constants{require_uint32_count(element_count, "element_count")};
   const auto push_constants_view = ByteView::from_object(push_constants);
@@ -88,10 +94,12 @@ void dispatch_with_element_count(ComputePipeline &pipeline,
 }
 
 void dispatch_radix_sort_pass(ComputePipeline &pipeline,
-                              const std::vector<const StorageBuffer *> &bindings,
+                              const ShaderInterface &shader,
+                              Span<const NamedStorageBinding> bindings,
                               DispatchShape dispatch_shape,
                               RadixSortPushConstants push_constants) {
-  pipeline.bind_storage_buffers(bindings);
+  require_storage_bindings(shader, bindings);
+  pipeline.bind_storage_buffers(resolve_storage_bindings(shader, bindings));
 
   const auto push_constants_view = ByteView::from_object(push_constants);
   pipeline.dispatch(dispatch_shape, push_constants_view);
@@ -103,89 +111,63 @@ void dispatch_radix_sort_pass(ComputePipeline &pipeline,
 }
 
 void validate_projection_forward_bindings(const ProjectionForwardBindings &bindings, std::size_t num_splats) {
-  require_binding(bindings.xyz_ws, "xyz_ws");
-  require_binding(bindings.sh_coeffs, "sh_coeffs");
-  require_binding(bindings.rotations, "rotations");
-  require_binding(bindings.scales_opacs, "scales_opacs");
-  require_binding(bindings.tiles_touched, "tiles_touched");
-  require_binding(bindings.rect_tile_space, "rect_tile_space");
-  require_binding(bindings.radii, "radii");
-  require_binding(bindings.xy_vs, "xy_vs");
-  require_binding(bindings.depths, "depths");
-  require_binding(bindings.inv_cov_vs_opacity, "inv_cov_vs_opacity");
-  require_binding(bindings.rgb, "rgb");
+  constexpr auto kShader = ShaderId::ProjectionForward;
+  const auto named_bindings = projection_forward_storage_bindings(bindings);
+  const auto binding_span = make_span(named_bindings);
+  require_storage_bindings(shader_interface(kShader), binding_span);
 
-  require_buffer_elements<float>(*bindings.xyz_ws, num_splats * 3U, "xyz_ws");
-  require_buffer_elements<float>(*bindings.sh_coeffs, projection_sh_coeff_float_count(num_splats), "sh_coeffs");
-  require_buffer_elements<float>(*bindings.rotations, num_splats * 4U, "rotations");
-  require_buffer_elements<float>(*bindings.scales_opacs, num_splats * 4U, "scales_opacs");
-  require_buffer_elements<std::int32_t>(*bindings.tiles_touched, num_splats, "tiles_touched");
-  require_buffer_elements<RectTileSpace>(*bindings.rect_tile_space, num_splats * kRectTileSpaceWords,
-                                         "rect_tile_space");
-  require_buffer_elements<std::int32_t>(*bindings.radii, num_splats, "radii");
-  require_buffer_elements<float>(*bindings.xy_vs, num_splats * 2U, "xy_vs");
-  require_buffer_elements<float>(*bindings.depths, num_splats, "depths");
-  require_buffer_elements<float>(*bindings.inv_cov_vs_opacity, num_splats * 4U, "inv_cov_vs_opacity");
-  require_buffer_elements<float>(*bindings.rgb, num_splats * 3U, "rgb");
-}
-
-[[nodiscard]] const StorageBuffer *projection_forward_buffer_by_name(const ProjectionForwardBindings &bindings,
-                                                                     std::string_view name) {
-  if (name == "xyz_ws") {
-    return bindings.xyz_ws;
-  }
-  if (name == "sh_coeffs") {
-    return bindings.sh_coeffs;
-  }
-  if (name == "rotations") {
-    return bindings.rotations;
-  }
-  if (name == "scales_opacs") {
-    return bindings.scales_opacs;
-  }
-  if (name == "tiles_touched") {
-    return bindings.tiles_touched;
-  }
-  if (name == "rect_tile_space") {
-    return bindings.rect_tile_space;
-  }
-  if (name == "radii") {
-    return bindings.radii;
-  }
-  if (name == "xy_vs") {
-    return bindings.xy_vs;
-  }
-  if (name == "depths") {
-    return bindings.depths;
-  }
-  if (name == "inv_cov_vs_opacity") {
-    return bindings.inv_cov_vs_opacity;
-  }
-  if (name == "rgb") {
-    return bindings.rgb;
-  }
-  throw std::invalid_argument("Unknown projection_forward binding: " + std::string(name));
+  // clang-format off
+  require_buffer_elements<float>(storage_binding_at<kShader, 0>(binding_span), num_splats * 3U,
+                                 shader_binding_name<kShader, 0>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 1>(binding_span),
+                                 projection_sh_coeff_float_count(num_splats), shader_binding_name<kShader, 1>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 2>(binding_span), num_splats * 4U,
+                                 shader_binding_name<kShader, 2>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 3>(binding_span), num_splats * 4U,
+                                 shader_binding_name<kShader, 3>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 4>(binding_span), num_splats,
+                                        shader_binding_name<kShader, 4>());
+  require_buffer_elements<RectTileSpace>(storage_binding_at<kShader, 5>(binding_span),
+                                         num_splats * kRectTileSpaceWords,
+                                         shader_binding_name<kShader, 5>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 6>(binding_span), num_splats,
+                                        shader_binding_name<kShader, 6>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 7>(binding_span), num_splats * 2U,
+                                 shader_binding_name<kShader, 7>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 8>(binding_span), num_splats,
+                                 shader_binding_name<kShader, 8>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 9>(binding_span), num_splats * 4U,
+                                 shader_binding_name<kShader, 9>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 10>(binding_span), num_splats * 3U,
+                                 shader_binding_name<kShader, 10>());
+  // clang-format on
 }
 
 void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
                                      std::size_t num_splats,
                                      std::size_t output_count) {
-  require_binding(bindings.xy_vs, "xy_vs");
-  require_binding(bindings.inv_cov_vs_opacity, "inv_cov_vs_opacity");
-  require_binding(bindings.depths, "depths");
-  require_binding(bindings.rect_tile_space, "rect_tile_space");
-  require_binding(bindings.index_buffer_offset, "index_buffer_offset");
-  require_binding(bindings.unsorted_keys, "unsorted_keys");
-  require_binding(bindings.unsorted_gauss_idx, "unsorted_gauss_idx");
+  constexpr auto kShader = ShaderId::GenerateKeys;
+  const auto named_bindings = generate_keys_storage_bindings(bindings);
+  const auto binding_span = make_span(named_bindings);
+  require_storage_bindings(shader_interface(kShader), binding_span);
 
-  require_buffer_elements<float>(*bindings.xy_vs, num_splats * 2U, "xy_vs");
-  require_buffer_elements<float>(*bindings.inv_cov_vs_opacity, num_splats * 4U, "inv_cov_vs_opacity");
-  require_buffer_elements<float>(*bindings.depths, num_splats, "depths");
-  require_buffer_elements<RectTileSpace>(*bindings.rect_tile_space, num_splats * kRectTileSpaceWords,
-                                         "rect_tile_space");
-  require_buffer_elements<std::int32_t>(*bindings.index_buffer_offset, num_splats, "index_buffer_offset");
-  require_buffer_elements<SortingKey>(*bindings.unsorted_keys, output_count, "unsorted_keys");
-  require_buffer_elements<std::int32_t>(*bindings.unsorted_gauss_idx, output_count, "unsorted_gauss_idx");
+  // clang-format off
+  require_buffer_elements<float>(storage_binding_at<kShader, 0>(binding_span), num_splats * 2U,
+                                 shader_binding_name<kShader, 0>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 1>(binding_span), num_splats * 4U,
+                                 shader_binding_name<kShader, 1>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 2>(binding_span), num_splats,
+                                 shader_binding_name<kShader, 2>());
+  require_buffer_elements<RectTileSpace>(storage_binding_at<kShader, 3>(binding_span),
+                                         num_splats * kRectTileSpaceWords,
+                                         shader_binding_name<kShader, 3>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 4>(binding_span), num_splats,
+                                        shader_binding_name<kShader, 4>());
+  require_buffer_elements<SortingKey>(storage_binding_at<kShader, 5>(binding_span), output_count,
+                                      shader_binding_name<kShader, 5>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 6>(binding_span), output_count,
+                                        shader_binding_name<kShader, 6>());
+  // clang-format on
 }
 
 [[nodiscard]] std::size_t require_tile_count(const RendererUniforms &uniforms) {
@@ -221,11 +203,17 @@ void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
 void validate_compute_tile_ranges_bindings(const ComputeTileRangesBindings &bindings,
                                            std::size_t num_indices,
                                            std::size_t num_tiles) {
-  require_binding(bindings.sorted_keys, "sorted_keys");
-  require_binding(bindings.tile_ranges, "tile_ranges");
+  constexpr auto kShader = ShaderId::ComputeTileRanges;
+  const auto named_bindings = compute_tile_ranges_storage_bindings(bindings);
+  const auto binding_span = make_span(named_bindings);
+  require_storage_bindings(shader_interface(kShader), binding_span);
 
-  require_buffer_elements<SortingKey>(*bindings.sorted_keys, num_indices, "sorted_keys");
-  require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
+  // clang-format off
+  require_buffer_elements<SortingKey>(storage_binding_at<kShader, 0>(binding_span), num_indices,
+                                      shader_binding_name<kShader, 0>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 1>(binding_span), num_tiles + 1U,
+                                        shader_binding_name<kShader, 1>());
+  // clang-format on
 }
 
 void validate_rasterize_forward_bindings(const RasterizeForwardBindings &bindings,
@@ -233,21 +221,27 @@ void validate_rasterize_forward_bindings(const RasterizeForwardBindings &binding
                                          std::size_t num_indices,
                                          std::size_t num_tiles,
                                          std::size_t num_pixels) {
-  require_binding(bindings.sorted_gauss_idx, "sorted_gauss_idx");
-  require_binding(bindings.tile_ranges, "tile_ranges");
-  require_binding(bindings.xy_vs, "xy_vs");
-  require_binding(bindings.inv_cov_vs_opacity, "inv_cov_vs_opacity");
-  require_binding(bindings.rgb, "rgb");
-  require_binding(bindings.pixel_state, "pixel_state");
-  require_binding(bindings.n_contributors, "n_contributors");
+  constexpr auto kShader = ShaderId::RasterizeForward;
+  const auto named_bindings = rasterize_forward_storage_bindings(bindings);
+  const auto binding_span = make_span(named_bindings);
+  require_storage_bindings(shader_interface(kShader), binding_span);
 
-  require_buffer_elements<std::int32_t>(*bindings.sorted_gauss_idx, num_indices, "sorted_gauss_idx");
-  require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
-  require_buffer_elements<float>(*bindings.xy_vs, num_splats * 2U, "xy_vs");
-  require_buffer_elements<float>(*bindings.inv_cov_vs_opacity, num_splats * 4U, "inv_cov_vs_opacity");
-  require_buffer_elements<float>(*bindings.rgb, num_splats * 3U, "rgb");
-  require_buffer_elements<float>(*bindings.pixel_state, num_pixels * 4U, "pixel_state");
-  require_buffer_elements<std::int32_t>(*bindings.n_contributors, num_pixels, "n_contributors");
+  // clang-format off
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 0>(binding_span), num_indices,
+                                        shader_binding_name<kShader, 0>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 1>(binding_span), num_tiles + 1U,
+                                        shader_binding_name<kShader, 1>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 2>(binding_span), num_splats * 2U,
+                                 shader_binding_name<kShader, 2>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 3>(binding_span), num_splats * 4U,
+                                 shader_binding_name<kShader, 3>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 4>(binding_span), num_splats * 3U,
+                                 shader_binding_name<kShader, 4>());
+  require_buffer_elements<float>(storage_binding_at<kShader, 5>(binding_span), num_pixels * 4U,
+                                 shader_binding_name<kShader, 5>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 6>(binding_span), num_pixels,
+                                        shader_binding_name<kShader, 6>());
+  // clang-format on
 }
 
 void validate_forward_bindings(const ForwardBindings &bindings, const RendererUniforms &uniforms) {
@@ -268,6 +262,7 @@ void validate_forward_bindings(const ForwardBindings &bindings, const RendererUn
   }
   const auto max_indices = num_splats * num_tiles;
 
+  // clang-format off
   require_buffer_elements<std::int32_t>(*bindings.index_buffer_offset, num_splats, "index_buffer_offset");
   require_buffer_elements<SortingKey>(*bindings.sorting_keys_1, max_indices, "sorting_keys_1");
   require_buffer_elements<std::int32_t>(*bindings.sorting_gauss_idx_1, max_indices, "sorting_gauss_idx_1");
@@ -276,6 +271,7 @@ void validate_forward_bindings(const ForwardBindings &bindings, const RendererUn
   require_buffer_elements<std::int32_t>(*bindings.tile_ranges, num_tiles + 1U, "tile_ranges");
   require_buffer_elements<float>(*bindings.pixel_state, num_pixels * 4U, "pixel_state");
   require_buffer_elements<std::int32_t>(*bindings.n_contributors, num_pixels, "n_contributors");
+  // clang-format on
 }
 
 void validate_radix_sort_bindings(const RadixSortBindings &bindings, std::size_t element_count) {
@@ -284,10 +280,12 @@ void validate_radix_sort_bindings(const RadixSortBindings &bindings, std::size_t
   require_binding(bindings.keys_2, "keys_2");
   require_binding(bindings.indices_2, "indices_2");
 
+  // clang-format off
   require_buffer_elements<SortingKey>(*bindings.keys_1, element_count, "keys_1");
   require_buffer_elements<std::uint32_t>(*bindings.indices_1, element_count, "indices_1");
   require_buffer_elements<SortingKey>(*bindings.keys_2, element_count, "keys_2");
   require_buffer_elements<std::uint32_t>(*bindings.indices_2, element_count, "indices_2");
+  // clang-format on
 }
 
 } // namespace
@@ -311,73 +309,95 @@ void execute_cumsum(const HeadlessContext &context,
                     const StorageBuffer &input,
                     StorageBuffer &output,
                     std::size_t element_count) {
+  constexpr auto kShader = ShaderId::CumsumSinglePass;
   require_uint32_count(element_count, "element_count");
-  require_buffer_elements<std::int32_t>(input, element_count, "input");
-  require_buffer_elements<std::int32_t>(output, element_count, "output");
+  // clang-format off
+  require_buffer_elements<std::int32_t>(input, element_count, shader_binding_name<kShader, 0>());
+  require_buffer_elements<std::int32_t>(output, element_count, shader_binding_name<kShader, 1>());
+  // clang-format on
 
   const auto num_blocks = ceil_div(element_count, static_cast<std::size_t>(VKSPLAT_CUMSUM_BLOCK_SIZE));
   auto block_sums = make_zero_buffer<std::int32_t>(context, num_blocks);
 
   if (element_count <= VKSPLAT_CUMSUM_BLOCK_SIZE) {
+    const auto &shader = shader_interface("cumsum_single_pass");
     auto spirv = make_span(shaders::kCumsumSinglePassSpirv);
-    ComputePipeline pipeline(context, spirv, kCumsumBindingCount, sizeof(ElementCountPushConstants));
-    dispatch_with_element_count(pipeline, {&input, &output, &block_sums}, element_count, VKSPLAT_CUMSUM_BLOCK_SIZE);
+    ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
+
+    const auto bindings = cumsum_storage_bindings(input, output, block_sums);
+    dispatch_with_element_count(pipeline, shader, make_span(bindings), element_count, VKSPLAT_CUMSUM_BLOCK_SIZE);
     return;
   }
+
+  const auto &block_scan_shader = shader_interface("cumsum_block_scan");
+  const auto &scan_block_sums_shader = shader_interface("cumsum_scan_block_sums");
+  const auto &add_offsets_shader = shader_interface("cumsum_add_block_offsets");
 
   auto block_scan_spirv = make_span(shaders::kCumsumBlockScanSpirv);
   auto scan_block_sums_spirv = make_span(shaders::kCumsumScanBlockSumsSpirv);
   auto add_offsets_spirv = make_span(shaders::kCumsumAddBlockOffsetsSpirv);
 
-  ComputePipeline block_scan_pipeline(context, block_scan_spirv, kCumsumBindingCount,
-                                      sizeof(ElementCountPushConstants));
-  ComputePipeline scan_block_sums_pipeline(context, scan_block_sums_spirv, kCumsumBindingCount,
-                                           sizeof(ElementCountPushConstants));
-  ComputePipeline add_offsets_pipeline(context, add_offsets_spirv, kCumsumBindingCount,
-                                       sizeof(ElementCountPushConstants));
+  ComputePipeline block_scan_pipeline(context, block_scan_spirv, block_scan_shader.binding_count,
+                                      block_scan_shader.push_constant_size);
+  ComputePipeline scan_block_sums_pipeline(context, scan_block_sums_spirv, scan_block_sums_shader.binding_count,
+                                           scan_block_sums_shader.push_constant_size);
+  ComputePipeline add_offsets_pipeline(context, add_offsets_spirv, add_offsets_shader.binding_count,
+                                       add_offsets_shader.push_constant_size);
 
-  const std::vector<const StorageBuffer *> primary_bindings = {
-      &input,
-      &output,
-      &block_sums,
-  };
+  const auto primary_bindings = cumsum_storage_bindings(input, output, block_sums);
 
-  dispatch_with_element_count(block_scan_pipeline, primary_bindings, element_count, VKSPLAT_CUMSUM_BLOCK_SIZE);
+  // clang-format off
+  dispatch_with_element_count(block_scan_pipeline, block_scan_shader, make_span(primary_bindings), element_count,
+                              VKSPLAT_CUMSUM_BLOCK_SIZE);
 
   if (num_blocks > VKSPLAT_CUMSUM_BLOCK_SIZE) {
     const auto num_blocks2 = ceil_div(num_blocks, static_cast<std::size_t>(VKSPLAT_CUMSUM_BLOCK_SIZE));
     auto block_sums2 = make_zero_buffer<std::int32_t>(context, num_blocks2);
 
-    const std::vector<const StorageBuffer *> block_sums_bindings = {
-        &block_sums,
-        &block_sums,
-        &block_sums2,
-    };
+    // NOLINTNEXTLINE(readability-suspicious-call-argument)
+    const auto block_sums_bindings = cumsum_storage_bindings(block_sums, block_sums, block_sums2);
 
-    dispatch_with_element_count(block_scan_pipeline, block_sums_bindings, num_blocks, VKSPLAT_CUMSUM_BLOCK_SIZE);
-    dispatch_with_element_count(scan_block_sums_pipeline, block_sums_bindings, num_blocks2, VKSPLAT_CUMSUM_BLOCK_SIZE);
-    dispatch_with_element_count(add_offsets_pipeline, block_sums_bindings, num_blocks, VKSPLAT_CUMSUM_BLOCK_SIZE);
+    dispatch_with_element_count(block_scan_pipeline, block_scan_shader, make_span(block_sums_bindings), num_blocks,
+                                VKSPLAT_CUMSUM_BLOCK_SIZE);
+    dispatch_with_element_count(scan_block_sums_pipeline, scan_block_sums_shader, make_span(block_sums_bindings),
+                                num_blocks2, VKSPLAT_CUMSUM_BLOCK_SIZE);
+    dispatch_with_element_count(add_offsets_pipeline, add_offsets_shader, make_span(block_sums_bindings), num_blocks,
+                                VKSPLAT_CUMSUM_BLOCK_SIZE);
   } else {
-    dispatch_with_element_count(scan_block_sums_pipeline, primary_bindings, num_blocks, VKSPLAT_CUMSUM_BLOCK_SIZE);
+    dispatch_with_element_count(scan_block_sums_pipeline, scan_block_sums_shader, make_span(primary_bindings),
+                                num_blocks, VKSPLAT_CUMSUM_BLOCK_SIZE);
   }
 
-  dispatch_with_element_count(add_offsets_pipeline, primary_bindings, element_count, VKSPLAT_CUMSUM_BLOCK_SIZE);
+  dispatch_with_element_count(add_offsets_pipeline, add_offsets_shader, make_span(primary_bindings), element_count,
+                              VKSPLAT_CUMSUM_BLOCK_SIZE);
+  // clang-format on
 }
 
 void execute_sum(const HeadlessContext &context,
                  const StorageBuffer &input,
                  StorageBuffer &output,
                  std::size_t element_count) {
+  constexpr auto kShader = ShaderId::Sum;
+  const auto &shader = shader_interface(kShader);
+  const auto bindings = sum_storage_bindings(input, output);
+  const auto binding_span = make_span(bindings);
+
   require_uint32_count(element_count, "element_count");
-  require_buffer_elements<std::int32_t>(input, element_count, "input");
-  require_buffer_elements<std::int32_t>(output, 1U, "output");
+  require_storage_bindings(shader, binding_span);
+  // clang-format off
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 0>(binding_span), element_count,
+                                        shader_binding_name<kShader, 0>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 1>(binding_span), 1U,
+                                        shader_binding_name<kShader, 1>());
+  // clang-format on
 
   const std::int32_t zero = 0;
   output.upload(ByteView::from_object(zero));
 
   auto spirv = make_span(shaders::kSumSpirv);
-  ComputePipeline pipeline(context, spirv, kSumBindingCount, sizeof(ElementCountPushConstants));
-  dispatch_with_element_count(pipeline, {&input, &output}, element_count, VKSPLAT_SUM_BLOCK_SIZE);
+  ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
+
+  dispatch_with_element_count(pipeline, shader, binding_span, element_count, VKSPLAT_SUM_BLOCK_SIZE);
 }
 
 void execute_where(const HeadlessContext &context,
@@ -385,14 +405,26 @@ void execute_where(const HeadlessContext &context,
                    const StorageBuffer &mask_cumsum,
                    StorageBuffer &out_indices,
                    std::size_t element_count) {
+  constexpr auto kShader = ShaderId::Where;
+  const auto &shader = shader_interface(kShader);
+  const auto bindings = where_storage_bindings(mask, mask_cumsum, out_indices);
+  const auto binding_span = make_span(bindings);
+
   require_uint32_count(element_count, "element_count");
-  require_buffer_elements<std::int32_t>(mask, element_count, "mask");
-  require_buffer_elements<std::int32_t>(mask_cumsum, element_count, "mask_cumsum");
-  require_buffer_elements<std::int32_t>(out_indices, 1U, "out_indices");
+  require_storage_bindings(shader, binding_span);
+  // clang-format off
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 0>(binding_span), element_count,
+                                        shader_binding_name<kShader, 0>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 1>(binding_span), element_count,
+                                        shader_binding_name<kShader, 1>());
+  require_buffer_elements<std::int32_t>(storage_binding_at<kShader, 2>(binding_span), 1U,
+                                        shader_binding_name<kShader, 2>());
+  // clang-format on
 
   auto spirv = make_span(shaders::kWhereSpirv);
-  ComputePipeline pipeline(context, spirv, kWhereBindingCount, sizeof(ElementCountPushConstants));
-  dispatch_with_element_count(pipeline, {&mask, &mask_cumsum, &out_indices}, element_count, VKSPLAT_WHERE_BLOCK_SIZE);
+  ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
+
+  dispatch_with_element_count(pipeline, shader, binding_span, element_count, VKSPLAT_WHERE_BLOCK_SIZE);
 }
 
 void execute_projection_forward(const HeadlessContext &context,
@@ -405,10 +437,8 @@ void execute_projection_forward(const HeadlessContext &context,
   auto spirv = make_span(shaders::kProjectionForwardSpirv);
   ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
 
-  const auto storage_bindings = resolve_storage_bindings(shader, [&bindings](std::string_view name) {
-    return projection_forward_buffer_by_name(bindings, name);
-  });
-  pipeline.bind_storage_buffers(storage_bindings);
+  const auto named_bindings = projection_forward_storage_bindings(bindings);
+  pipeline.bind_storage_buffers(resolve_storage_bindings(shader, make_span(named_bindings)));
 
   const auto push_constants = ByteView::from_object(uniforms);
   pipeline.dispatch(dispatch_groups_for(num_splats, VKSPLAT_SUBGROUP_SIZE), push_constants);
@@ -422,18 +452,12 @@ void execute_generate_keys(const HeadlessContext &context,
   require_uint32_count(output_count, "output_count");
   validate_generate_keys_bindings(bindings, num_splats, output_count);
 
+  const auto &shader = shader_interface("generate_keys");
   auto spirv = make_span(shaders::kGenerateKeysSpirv);
-  ComputePipeline pipeline(context, spirv, kGenerateKeysBindingCount, sizeof(RendererUniforms));
+  ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
 
-  pipeline.bind_storage_buffers({
-      bindings.xy_vs,
-      bindings.inv_cov_vs_opacity,
-      bindings.depths,
-      bindings.rect_tile_space,
-      bindings.index_buffer_offset,
-      bindings.unsorted_keys,
-      bindings.unsorted_gauss_idx,
-  });
+  const auto named_bindings = generate_keys_storage_bindings(bindings);
+  pipeline.bind_storage_buffers(resolve_storage_bindings(shader, make_span(named_bindings)));
 
   const auto push_constants = ByteView::from_object(uniforms);
   pipeline.dispatch(dispatch_groups_for(num_splats, VKSPLAT_TILE_SHADER_GENERATE_KEYS_BLOCK_SIZE), push_constants);
@@ -450,13 +474,12 @@ void execute_compute_tile_ranges(const HeadlessContext &context,
   auto tile_range_uniforms = uniforms;
   tile_range_uniforms.active_sh = num_indices_u32;
 
+  const auto &shader = shader_interface("compute_tile_ranges");
   auto spirv = make_span(shaders::kComputeTileRangesSpirv);
-  ComputePipeline pipeline(context, spirv, kComputeTileRangesBindingCount, sizeof(RendererUniforms));
+  ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
 
-  pipeline.bind_storage_buffers({
-      bindings.sorted_keys,
-      bindings.tile_ranges,
-  });
+  const auto named_bindings = compute_tile_ranges_storage_bindings(bindings);
+  pipeline.bind_storage_buffers(resolve_storage_bindings(shader, make_span(named_bindings)));
 
   const auto push_constants = ByteView::from_object(tile_range_uniforms);
   pipeline.dispatch(dispatch_groups_for(num_indices + 1U, VKSPLAT_TILE_SHADER_TILE_RANGES_THREADS), push_constants);
@@ -472,18 +495,12 @@ void execute_rasterize_forward(const HeadlessContext &context,
   const auto num_pixels = require_pixel_count(uniforms);
   validate_rasterize_forward_bindings(bindings, num_splats, num_indices, num_tiles, num_pixels);
 
+  const auto &shader = shader_interface("rasterize_forward");
   auto spirv = make_span(shaders::kRasterizeForwardSpirv);
-  ComputePipeline pipeline(context, spirv, kRasterizeForwardBindingCount, sizeof(RendererUniforms));
+  ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
 
-  pipeline.bind_storage_buffers({
-      bindings.sorted_gauss_idx,
-      bindings.tile_ranges,
-      bindings.xy_vs,
-      bindings.inv_cov_vs_opacity,
-      bindings.rgb,
-      bindings.pixel_state,
-      bindings.n_contributors,
-  });
+  const auto named_bindings = rasterize_forward_storage_bindings(bindings);
+  pipeline.bind_storage_buffers(resolve_storage_bindings(shader, make_span(named_bindings)));
 
   const auto groups_x =
       require_uint32_count(ceil_div(uniforms.image_width, VKSPLAT_TILE_WIDTH), "rasterize_forward groups_x");
@@ -511,11 +528,15 @@ auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindi
   auto spine_spirv = make_span(shaders::kRadixSortSpineSpirv);
   auto downsweep_spirv = make_span(shaders::kRadixSortDownsweepSpirv);
 
-  ComputePipeline upsweep_pipeline(context, upsweep_spirv, kRadixSortUpsweepBindingCount,
-                                   sizeof(RadixSortPushConstants));
-  ComputePipeline spine_pipeline(context, spine_spirv, kRadixSortSpineBindingCount, sizeof(RadixSortPushConstants));
-  ComputePipeline downsweep_pipeline(context, downsweep_spirv, kRadixSortDownsweepBindingCount,
-                                     sizeof(RadixSortPushConstants));
+  const auto &upsweep_shader = shader_interface("radix_sort_upsweep");
+  const auto &spine_shader = shader_interface("radix_sort_spine");
+  const auto &downsweep_shader = shader_interface("radix_sort_downsweep");
+
+  ComputePipeline upsweep_pipeline(context, upsweep_spirv, upsweep_shader.binding_count,
+                                   upsweep_shader.push_constant_size);
+  ComputePipeline spine_pipeline(context, spine_spirv, spine_shader.binding_count, spine_shader.push_constant_size);
+  ComputePipeline downsweep_pipeline(context, downsweep_spirv, downsweep_shader.binding_count,
+                                     downsweep_shader.push_constant_size);
 
   const DispatchShape partition_dispatch_shape{num_parts_u32, 1U, 1U};
   const DispatchShape spine_dispatch_shape{VKSPLAT_RADIX_SORT_RADIX, 1U, 1U};
@@ -528,15 +549,20 @@ auto execute_sort(const HeadlessContext &context, const RadixSortBindings &bindi
   for (std::uint32_t pass = 0; pass < kRadixSortPasses; ++pass) {
     const RadixSortPushConstants push_constants{pass, element_count_u32};
 
-    dispatch_radix_sort_pass(upsweep_pipeline, {keys_in, &global_histogram, &partition_histogram},
-                             partition_dispatch_shape, push_constants);
-
-    dispatch_radix_sort_pass(spine_pipeline, {&global_histogram, &partition_histogram}, spine_dispatch_shape,
+    const auto upsweep_bindings = radix_sort_upsweep_storage_bindings(*keys_in, global_histogram, partition_histogram);
+    dispatch_radix_sort_pass(upsweep_pipeline, upsweep_shader, make_span(upsweep_bindings), partition_dispatch_shape,
                              push_constants);
 
-    dispatch_radix_sort_pass(downsweep_pipeline,
-                             {&global_histogram, &partition_histogram, keys_in, indices_in, keys_out, indices_out},
+    const auto spine_bindings = radix_sort_spine_storage_bindings(global_histogram, partition_histogram);
+    dispatch_radix_sort_pass(spine_pipeline, spine_shader, make_span(spine_bindings), spine_dispatch_shape,
+                             push_constants);
+
+    // clang-format off
+    const auto downsweep_bindings = radix_sort_downsweep_storage_bindings(
+        global_histogram, partition_histogram, *keys_in, *indices_in, *keys_out, *indices_out);
+    dispatch_radix_sort_pass(downsweep_pipeline, downsweep_shader, make_span(downsweep_bindings),
                              partition_dispatch_shape, push_constants);
+    // clang-format on
 
     std::swap(keys_in, keys_out);
     std::swap(indices_in, indices_out);

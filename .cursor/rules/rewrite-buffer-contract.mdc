@@ -13,7 +13,8 @@ Parity contract for rewrite dispatches and golden tests. Read before porting eac
 | What | Where |
 |------|-------|
 | Buffer field names and shapes | `ref/vksplat/src/buffer.h`, especially `VulkanGSPipelineBuffers` |
-| Per-kernel binding tables | `ref/docs/shader-pipeline.md`, subgraph sections and shader index |
+| Rewrite host binding registry | `next/nlrc_vksplat/src/gpu/shader_descriptors.hpp` |
+| Reference per-kernel binding tables | `ref/docs/shader-pipeline.md`, subgraph sections and shader index |
 | Ref dispatch wiring | `ref/vksplat/src/gs_renderer.cpp`, `gs_trainer.cpp`, vectors passed to `executeCompute` |
 | Rewrite config-dependent types | `next/nlrc_vksplat/src/nlrc_vksplat_config.hpp` |
 | Rewrite dispatch API | `ComputePipeline`, `StorageBindingList`, `DispatchShape`, `PushConstantsView` |
@@ -25,7 +26,8 @@ Ref API terminology: `executeCompute(dims, uniformsPtr, uniformSize, pipeline, b
 Rewrite API terminology: bind `StorageBindingList`, then dispatch with `DispatchShape` and optional `PushConstantsView`.
 
 - `buffers[i]` maps to descriptor binding `i` with `VK_DESCRIPTOR_TYPE_STORAGE_BUFFER`.
-- Vector order must match the Bind column in `shader-pipeline.md` for that kernel.
+- Rewrite host vector order must come from the logical shader entry in `shader_descriptors.hpp`.
+- When adding or changing a registry entry, verify it against the Bind column in `shader-pipeline.md` for that kernel.
 - Do not sort bindings alphabetically.
 - Do not infer binding order from `VulkanGSPipelineBuffers` member order.
 - Use `buffer.h` identifiers in docs, manifests, and tests, such as `xyz_ws` and `rect_tile_space`.
@@ -38,7 +40,7 @@ Rewrite API terminology: bind `StorageBindingList`, then dispatch with `Dispatch
 // BAD - struct declaration order
 pipeline.bind_storage_buffers({scales_opacs, xyz_ws});
 
-// GOOD - shader-pipeline.md Bind column order
+// GOOD - shader_descriptors.hpp registry order
 pipeline.bind_storage_buffers({xyz_ws, sh_coeffs, rotations, scales_opacs});
 ```
 
@@ -55,8 +57,8 @@ pipeline.bind_storage_buffers({xyz_ws, sh_coeffs, rotations, scales_opacs});
 
 ## Parity Checklist Per Stage
 
-1. Verify the binding table in `shader-pipeline.md` for this SPIR-V name.
-2. Host binding list length matches shader binding count.
+1. Add or verify the logical shader entry in `shader_descriptors.hpp` against `shader-pipeline.md`.
+2. Host binding list length matches the registry binding count.
 3. Push constant size matches shader and wrapper constructor size.
 4. Fixture/golden `manifest.json` includes `bindings[]` in descriptor order.
 5. Fixture dtypes and shapes match `BufferSpec` before changing shader logic.

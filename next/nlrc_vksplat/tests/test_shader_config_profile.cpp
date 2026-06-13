@@ -36,6 +36,7 @@ struct ExpectedUint32 final {
 }
 
 [[nodiscard]] std::vector<std::string> find_config_mismatches(const nlohmann::json &config) {
+  // clang-format off
   const std::array expected_ints = {
       ExpectedInt{"use_emulated_int64", config.at("use_emulated_int64").get<int>(), VKSPLAT_USE_EMULATED_INT64},
       ExpectedInt{"use_emulated_int64 constexpr", config.at("use_emulated_int64").get<int>(),
@@ -49,11 +50,12 @@ struct ExpectedUint32 final {
   };
   const std::array expected_uint32s = {
       ExpectedUint32{"rect_tile_space_words", config.at("rect_tile_space_words").get<std::uint32_t>(),
-                     kRectTileSpaceWords},
+                   kRectTileSpaceWords},
       ExpectedUint32{"tile_size", config.at("tile_size").get<std::uint32_t>(), kTileSize},
       ExpectedUint32{"subgroup_size", config.at("subgroup_size").get<std::uint32_t>(), kSubgroupSize},
       ExpectedUint32{"sorting_key_bits", config.at("sorting_key_bits").get<std::uint32_t>(), kSortingKeyBits},
   };
+  // clang-format on
 
   std::vector<std::string> mismatches;
   for (const auto &expected : expected_ints) {

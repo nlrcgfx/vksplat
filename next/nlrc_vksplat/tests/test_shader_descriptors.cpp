@@ -3,14 +3,19 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
+#include "gpu/shader_binding_resolver.hpp"
 #include "gpu/shader_descriptors.hpp"
 #include "gpu/shader_execution.hpp"
+#include "shader_fixture_mapping.hpp"
 
 using namespace nlrc::vksplat;
 
@@ -24,9 +29,68 @@ struct ExpectedShader final {
   const char *source_path;
 };
 
-[[nodiscard]] bool has_prefix(const std::string &value, std::string_view prefix) {
-  return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
-}
+template <typename T>
+inline constexpr std::size_t kStorageBindingArraySize = std::tuple_size_v<std::remove_cv_t<std::remove_reference_t<T>>>;
+
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::CumsumSinglePass>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::CumsumBlockScan>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::CumsumScanBlockSums>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::CumsumAddBlockOffsets>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::Sum>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::Where>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::ProjectionForward>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::GenerateKeys>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::ComputeTileRanges>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::RasterizeForward>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::RadixSortUpsweep>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::RadixSortSpine>());
+static_assert(gpu::storage_binding_names_match_registry<gpu::ShaderId::RadixSortDownsweep>());
+
+// clang-format off
+static_assert(kStorageBindingArraySize<decltype(gpu::cumsum_storage_bindings(
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::CumsumSinglePass>);
+static_assert(kStorageBindingArraySize<decltype(gpu::sum_storage_bindings(
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::Sum>);
+static_assert(kStorageBindingArraySize<decltype(gpu::where_storage_bindings(
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::Where>);
+static_assert(kStorageBindingArraySize<decltype(gpu::projection_forward_storage_bindings(
+                  std::declval<const gpu::ProjectionForwardBindings &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::ProjectionForward>);
+static_assert(kStorageBindingArraySize<decltype(gpu::generate_keys_storage_bindings(
+                  std::declval<const gpu::GenerateKeysBindings &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::GenerateKeys>);
+static_assert(kStorageBindingArraySize<decltype(gpu::compute_tile_ranges_storage_bindings(
+                  std::declval<const gpu::ComputeTileRangesBindings &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::ComputeTileRanges>);
+static_assert(kStorageBindingArraySize<decltype(gpu::rasterize_forward_storage_bindings(
+                  std::declval<const gpu::RasterizeForwardBindings &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::RasterizeForward>);
+static_assert(kStorageBindingArraySize<decltype(gpu::radix_sort_upsweep_storage_bindings(
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::RadixSortUpsweep>);
+static_assert(kStorageBindingArraySize<decltype(gpu::radix_sort_spine_storage_bindings(
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::RadixSortSpine>);
+static_assert(kStorageBindingArraySize<decltype(gpu::radix_sort_downsweep_storage_bindings(
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>(),
+                  std::declval<const gpu::StorageBuffer &>()))> ==
+              gpu::shader_binding_count_v<gpu::ShaderId::RadixSortDownsweep>);
+// clang-format on
 
 [[nodiscard]] std::vector<std::filesystem::path> manifest_paths_under(const std::filesystem::path &root) {
   std::vector<std::filesystem::path> paths;
@@ -45,55 +109,21 @@ struct ExpectedShader final {
   return paths;
 }
 
-[[nodiscard]] const gpu::ShaderInterface *
-shader_interface_for_fixture(const tests::FixtureManifest &manifest) {
-  if (manifest.subgraph == "projection" && has_prefix(manifest.stage_name, "projection_forward_")) {
-    return &gpu::shader_interface("projection_forward");
-  }
-  if (manifest.subgraph == "generate_keys" && has_prefix(manifest.stage_name, "generate_keys_")) {
-    return &gpu::shader_interface("generate_keys");
-  }
-  if (manifest.subgraph == "compute_tile_ranges" && has_prefix(manifest.stage_name, "compute_tile_ranges")) {
-    return &gpu::shader_interface("compute_tile_ranges");
-  }
-  if (manifest.subgraph == "rasterize_forward" && has_prefix(manifest.stage_name, "rasterize_forward_")) {
-    return &gpu::shader_interface("rasterize_forward");
-  }
-  if (manifest.subgraph == "utility") {
-    if (manifest.stage_name == "sum" || has_prefix(manifest.stage_name, "sum_")) {
-      return &gpu::shader_interface("sum");
-    }
-    if (manifest.stage_name == "where" || has_prefix(manifest.stage_name, "where_")) {
-      return &gpu::shader_interface("where");
-    }
-    if (manifest.stage_name == "cumsum_single_pass" || has_prefix(manifest.stage_name, "cumsum_single_pass_")) {
-      return &gpu::shader_interface("cumsum_single_pass");
-    }
-  }
-  return nullptr;
+template <gpu::ShaderId Id, std::size_t... Indices>
+// NOLINTNEXTLINE(readability-named-parameter)
+[[nodiscard]] std::vector<std::string> registry_binding_name_strings(std::index_sequence<Indices...>) {
+  return {std::string(gpu::shader_binding_name<Id, Indices>())...};
 }
 
-[[nodiscard]] const gpu::FixtureBindingContract *
-fixture_contract_for_manifest(const tests::FixtureManifest &manifest) {
-  if (manifest.subgraph == "radix_sort" && has_prefix(manifest.stage_name, "radix_sort_")) {
-    return &gpu::fixture_binding_contract("radix_sort_pipeline");
-  }
-  if (manifest.subgraph == "utility" && manifest.stage_name == "cumsum_multi_block") {
-    return &gpu::fixture_binding_contract("cumsum_multi_block");
-  }
-  if (manifest.subgraph == "utility" && manifest.stage_name == "cumsum_multi_block_two_level") {
-    return &gpu::fixture_binding_contract("cumsum_multi_block_two_level");
-  }
-  return nullptr;
-}
-
-[[nodiscard]] bool is_intentionally_untracked_fixture(const tests::FixtureManifest &manifest) {
-  return manifest.subgraph == "harness";
+template <gpu::ShaderId Id>
+[[nodiscard]] std::vector<std::string> registry_binding_name_strings() {
+  return registry_binding_name_strings<Id>(std::make_index_sequence<gpu::shader_binding_count_v<Id>>{});
 }
 
 } // namespace
 
 TEST_CASE("Shader descriptor registry exposes ported logical shader metadata", "[host]") {
+  // clang-format off
   const std::array expected = {
       ExpectedShader{gpu::ShaderId::CumsumSinglePass, "cumsum_single_pass", gpu::kCumsumBindingCount,
                      sizeof(gpu::ElementCountPushConstants), "slang/cumsum.slang"},
@@ -122,6 +152,7 @@ TEST_CASE("Shader descriptor registry exposes ported logical shader metadata", "
       ExpectedShader{gpu::ShaderId::RadixSortDownsweep, "radix_sort_downsweep", gpu::kRadixSortDownsweepBindingCount,
                      sizeof(gpu::RadixSortPushConstants), "shader/radix_sort/downsweep.comp"},
   };
+  // clang-format on
 
   REQUIRE(gpu::shader_interfaces().size() == expected.size());
 
@@ -150,7 +181,7 @@ TEST_CASE("Projection descriptor matches binding count and projection fixtures",
   std::size_t checked_projection_fixtures = 0;
   for (const auto &manifest_path : manifest_paths_under(tests::test_data_root() / "fixtures")) {
     const auto manifest = tests::load_fixture_manifest(manifest_path);
-    if (manifest.subgraph != "projection" || !has_prefix(manifest.stage_name, "projection_forward_")) {
+    if (manifest.subgraph != "projection" || manifest.stage_name.find("projection_forward_") != 0U) {
       continue;
     }
 
@@ -162,6 +193,37 @@ TEST_CASE("Projection descriptor matches binding count and projection fixtures",
   REQUIRE(checked_projection_fixtures > 0);
 }
 
+TEST_CASE("Shader descriptors preserve dispatch binding order", "[host]") {
+  // clang-format off
+  REQUIRE(gpu::binding_names(gpu::shader_interface("cumsum_single_pass")) ==
+          registry_binding_name_strings<gpu::ShaderId::CumsumSinglePass>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("cumsum_block_scan")) ==
+          registry_binding_name_strings<gpu::ShaderId::CumsumBlockScan>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("cumsum_scan_block_sums")) ==
+          registry_binding_name_strings<gpu::ShaderId::CumsumScanBlockSums>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("cumsum_add_block_offsets")) ==
+          registry_binding_name_strings<gpu::ShaderId::CumsumAddBlockOffsets>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("sum")) ==
+          registry_binding_name_strings<gpu::ShaderId::Sum>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("where")) ==
+          registry_binding_name_strings<gpu::ShaderId::Where>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("projection_forward")) ==
+          registry_binding_name_strings<gpu::ShaderId::ProjectionForward>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("generate_keys")) ==
+          registry_binding_name_strings<gpu::ShaderId::GenerateKeys>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("compute_tile_ranges")) ==
+          registry_binding_name_strings<gpu::ShaderId::ComputeTileRanges>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("rasterize_forward")) ==
+          registry_binding_name_strings<gpu::ShaderId::RasterizeForward>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("radix_sort_upsweep")) ==
+          registry_binding_name_strings<gpu::ShaderId::RadixSortUpsweep>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("radix_sort_spine")) ==
+          registry_binding_name_strings<gpu::ShaderId::RadixSortSpine>());
+  REQUIRE(gpu::binding_names(gpu::shader_interface("radix_sort_downsweep")) ==
+          registry_binding_name_strings<gpu::ShaderId::RadixSortDownsweep>());
+  // clang-format on
+}
+
 TEST_CASE("Fixture catalog bindings match shader descriptor registry", "[host]") {
   std::size_t checked_fixtures = 0;
 
@@ -170,19 +232,19 @@ TEST_CASE("Fixture catalog bindings match shader descriptor registry", "[host]")
     INFO("manifest: " << manifest_path.string());
     INFO("stage: " << manifest.stage_name);
 
-    if (const auto *shader = shader_interface_for_fixture(manifest); shader != nullptr) {
+    if (const auto *shader = tests::shader_interface_for_fixture(manifest); shader != nullptr) {
       REQUIRE(manifest.bindings == gpu::binding_names(*shader));
       ++checked_fixtures;
       continue;
     }
 
-    if (const auto *contract = fixture_contract_for_manifest(manifest); contract != nullptr) {
+    if (const auto *contract = tests::fixture_contract_for_manifest(manifest); contract != nullptr) {
       REQUIRE(manifest.bindings == gpu::binding_names(*contract));
       ++checked_fixtures;
       continue;
     }
 
-    if (is_intentionally_untracked_fixture(manifest)) {
+    if (tests::fixture_is_intentionally_untracked(manifest)) {
       continue;
     }
 

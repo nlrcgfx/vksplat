@@ -97,13 +97,21 @@ void ComputePipeline::create_compute_pipeline() {
       nullptr,
   };
 
+  // clang-format off
   const VkComputePipelineCreateInfo pipeline_info{
-      VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, nullptr, 0, stage_info, pipeline_layout_, VK_NULL_HANDLE, 0,
+      VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      nullptr,
+      0,
+      stage_info,
+      pipeline_layout_,
+      VK_NULL_HANDLE,
+      0,
   };
 
   check_vk(vkCreateComputePipelines(context_->device(), VK_NULL_HANDLE, kSinglePipelineCreateCount, &pipeline_info,
                                     nullptr, &pipeline_),
            "vkCreateComputePipelines");
+  // clang-format on
 }
 
 void ComputePipeline::create_descriptor_pool_and_set() {
@@ -225,12 +233,16 @@ void ComputePipeline::dispatch(DispatchShape shape, PushConstantsView push_const
 
   vkCmdBindPipeline(command_buffer_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
   if (storage_buffer_count_ > 0) {
+    // clang-format off
     vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout_, kDescriptorSetIndex,
                             kDescriptorSetCount, &descriptor_set_, kNoDynamicOffsetCount, nullptr);
+    // clang-format on
   }
   if (!push_constants.empty()) {
+    // clang-format off
     vkCmdPushConstants(command_buffer_, pipeline_layout_, VK_SHADER_STAGE_COMPUTE_BIT, kPushConstantOffset,
                        static_cast<std::uint32_t>(push_constants.size_bytes()), push_constants.data());
+    // clang-format on
   }
   vkCmdDispatch(command_buffer_, shape.groups_x, shape.groups_y, shape.groups_z);
 
