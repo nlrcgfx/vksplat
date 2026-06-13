@@ -39,6 +39,7 @@ target_sources(nlrc_vksplat_core
       src/gpu/constants.hpp
       src/gpu/compute_pipeline.hpp
       src/gpu/headless_context.hpp
+      src/gpu/shader_descriptors.hpp
       src/gpu/shader_execution.hpp
       src/gpu/storage_buffer.hpp
       src/nlrc_vksplat_config.hpp

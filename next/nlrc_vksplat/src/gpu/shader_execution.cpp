@@ -3,6 +3,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -64,6 +65,17 @@ template <typename T>
   return make_storage_buffer(context, values);
 }
 
+template <typename Resolver>
+[[nodiscard]] std::vector<const StorageBuffer *> resolve_storage_bindings(const ShaderInterface &shader,
+                                                                          Resolver resolver) {
+  std::vector<const StorageBuffer *> buffers;
+  buffers.reserve(shader.binding_count);
+  for (std::size_t index = 0; index < shader.bindings.size(); ++index) {
+    buffers.push_back(resolver(shader.bindings[index].name));
+  }
+  return buffers;
+}
+
 void dispatch_with_element_count(ComputePipeline &pipeline,
                                  const std::vector<const StorageBuffer *> &bindings,
                                  std::size_t element_count,
@@ -115,6 +127,44 @@ void validate_projection_forward_bindings(const ProjectionForwardBindings &bindi
   require_buffer_elements<float>(*bindings.depths, num_splats, "depths");
   require_buffer_elements<float>(*bindings.inv_cov_vs_opacity, num_splats * 4U, "inv_cov_vs_opacity");
   require_buffer_elements<float>(*bindings.rgb, num_splats * 3U, "rgb");
+}
+
+[[nodiscard]] const StorageBuffer *projection_forward_buffer_by_name(const ProjectionForwardBindings &bindings,
+                                                                     std::string_view name) {
+  if (name == "xyz_ws") {
+    return bindings.xyz_ws;
+  }
+  if (name == "sh_coeffs") {
+    return bindings.sh_coeffs;
+  }
+  if (name == "rotations") {
+    return bindings.rotations;
+  }
+  if (name == "scales_opacs") {
+    return bindings.scales_opacs;
+  }
+  if (name == "tiles_touched") {
+    return bindings.tiles_touched;
+  }
+  if (name == "rect_tile_space") {
+    return bindings.rect_tile_space;
+  }
+  if (name == "radii") {
+    return bindings.radii;
+  }
+  if (name == "xy_vs") {
+    return bindings.xy_vs;
+  }
+  if (name == "depths") {
+    return bindings.depths;
+  }
+  if (name == "inv_cov_vs_opacity") {
+    return bindings.inv_cov_vs_opacity;
+  }
+  if (name == "rgb") {
+    return bindings.rgb;
+  }
+  throw std::invalid_argument("Unknown projection_forward binding: " + std::string(name));
 }
 
 void validate_generate_keys_bindings(const GenerateKeysBindings &bindings,
@@ -351,22 +401,14 @@ void execute_projection_forward(const HeadlessContext &context,
   const auto num_splats = static_cast<std::size_t>(require_uint32_count(uniforms.num_splats, "num_splats"));
   validate_projection_forward_bindings(bindings, num_splats);
 
+  const auto &shader = shader_interface("projection_forward");
   auto spirv = make_span(shaders::kProjectionForwardSpirv);
-  ComputePipeline pipeline(context, spirv, kProjectionForwardBindingCount, sizeof(RendererUniforms));
+  ComputePipeline pipeline(context, spirv, shader.binding_count, shader.push_constant_size);
 
-  pipeline.bind_storage_buffers({
-      bindings.xyz_ws,
-      bindings.sh_coeffs,
-      bindings.rotations,
-      bindings.scales_opacs,
-      bindings.tiles_touched,
-      bindings.rect_tile_space,
-      bindings.radii,
-      bindings.xy_vs,
-      bindings.depths,
-      bindings.inv_cov_vs_opacity,
-      bindings.rgb,
+  const auto storage_bindings = resolve_storage_bindings(shader, [&bindings](std::string_view name) {
+    return projection_forward_buffer_by_name(bindings, name);
   });
+  pipeline.bind_storage_buffers(storage_bindings);
 
   const auto push_constants = ByteView::from_object(uniforms);
   pipeline.dispatch(dispatch_groups_for(num_splats, VKSPLAT_SUBGROUP_SIZE), push_constants);

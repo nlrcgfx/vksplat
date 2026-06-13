@@ -101,10 +101,7 @@ TEST_CASE("Dispatch compute_tile_ranges shader", "[gpu]") {
   const auto manifest = tests::load_fixture_manifest(fixture_root / "manifest.json");
   const auto golden_manifest = tests::load_fixture_manifest(golden_root / "manifest.json");
 
-  const std::vector<std::string> expected_bindings = {
-      "sorted_keys",
-      "tile_ranges",
-  };
+  const auto expected_bindings = gpu::binding_names(gpu::shader_interface("compute_tile_ranges"));
   REQUIRE(manifest.bindings == expected_bindings);
   REQUIRE(manifest.bindings.size() == gpu::kComputeTileRangesBindingCount);
   REQUIRE(manifest.profile_agnostic);

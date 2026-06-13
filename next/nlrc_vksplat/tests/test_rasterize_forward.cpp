@@ -219,9 +219,7 @@ TEST_CASE("Dispatch rasterize_forward shader", "[gpu]") {
       const auto fixture_root = tests::fixture_dir(stage_name);
       const auto manifest = tests::load_fixture_manifest(fixture_root / "manifest.json");
 
-      const std::vector<std::string> expected_bindings = {
-          "sorted_gauss_idx", "tile_ranges", "xy_vs", "inv_cov_vs_opacity", "rgb", "pixel_state", "n_contributors",
-      };
+      const auto expected_bindings = gpu::binding_names(gpu::shader_interface("rasterize_forward"));
       REQUIRE(manifest.bindings == expected_bindings);
       REQUIRE(manifest.bindings.size() == gpu::kRasterizeForwardBindingCount);
       REQUIRE(manifest.profile_agnostic);

@@ -1,65 +1,29 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
 #include "gpu/compute_pipeline.hpp"
 #include "gpu/headless_context.hpp"
+#include "gpu/shader_descriptors.hpp"
 #include "gpu/storage_buffer.hpp"
 #include "nlrc_vksplat_config.hpp"
 
 namespace nlrc::vksplat::gpu {
 
-inline constexpr std::uint32_t kCumsumBindingCount = 3;
-inline constexpr std::uint32_t kSumBindingCount = 2;
-inline constexpr std::uint32_t kWhereBindingCount = 3;
-inline constexpr std::uint32_t kGenerateKeysBindingCount = 7;
-inline constexpr std::uint32_t kComputeTileRangesBindingCount = 2;
-inline constexpr std::uint32_t kRasterizeForwardBindingCount = 7;
-inline constexpr std::uint32_t kProjectionForwardBindingCount = 11;
-inline constexpr std::uint32_t kRadixSortUpsweepBindingCount = 3;
-inline constexpr std::uint32_t kRadixSortSpineBindingCount = 2;
-inline constexpr std::uint32_t kRadixSortDownsweepBindingCount = 6;
+inline constexpr std::uint32_t kCumsumBindingCount = kCumsumDescriptorBindingCount;
+inline constexpr std::uint32_t kSumBindingCount = kSumDescriptorBindingCount;
+inline constexpr std::uint32_t kWhereBindingCount = kWhereDescriptorBindingCount;
+inline constexpr std::uint32_t kGenerateKeysBindingCount = kGenerateKeysDescriptorBindingCount;
+inline constexpr std::uint32_t kComputeTileRangesBindingCount = kComputeTileRangesDescriptorBindingCount;
+inline constexpr std::uint32_t kRasterizeForwardBindingCount = kRasterizeForwardDescriptorBindingCount;
+inline constexpr std::uint32_t kProjectionForwardBindingCount = kProjectionForwardDescriptorBindingCount;
+inline constexpr std::uint32_t kRadixSortUpsweepBindingCount = kRadixSortUpsweepDescriptorBindingCount;
+inline constexpr std::uint32_t kRadixSortSpineBindingCount = kRadixSortSpineDescriptorBindingCount;
+inline constexpr std::uint32_t kRadixSortDownsweepBindingCount = kRadixSortDownsweepDescriptorBindingCount;
 inline constexpr std::uint32_t kRadixSortPasses = VKSPLAT_SORTING_KEY_BITS / VKSPLAT_RADIX_BITS_PER_PASS;
 
 static_assert(VKSPLAT_SORTING_KEY_BITS % VKSPLAT_RADIX_BITS_PER_PASS == 0);
-
-struct ElementCountPushConstants final {
-  std::uint32_t num_elements{};
-};
-
-static_assert(sizeof(ElementCountPushConstants) == 4);
-
-struct RadixSortPushConstants final {
-  std::uint32_t pass{};
-  std::uint32_t element_count{};
-};
-
-static_assert(sizeof(RadixSortPushConstants) == 8);
-
-struct RendererUniforms final {
-  std::uint32_t image_height{};
-  std::uint32_t image_width{};
-  std::uint32_t grid_height{};
-  std::uint32_t grid_width{};
-  std::uint32_t num_splats{};
-  std::uint32_t active_sh{};
-  std::uint32_t step{};
-  std::uint32_t camera_model{};
-  float fx{};
-  float fy{};
-  float cx{};
-  float cy{};
-  std::array<float, 4> dist_coeffs{};
-  std::array<float, 16> world_view_transform{};
-};
-
-static_assert(sizeof(RendererUniforms) == 128);
-static_assert(sizeof(RendererUniforms) <= kMaxPushConstantBytes);
-static_assert(offsetof(RendererUniforms, fx) == 32);
-static_assert(offsetof(RendererUniforms, dist_coeffs) == 48);
-static_assert(offsetof(RendererUniforms, world_view_transform) == 64);
 
 struct ProjectionForwardBindings final {
   const StorageBuffer *xyz_ws{};

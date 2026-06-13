@@ -104,10 +104,7 @@ TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
   const auto fixture_root = tests::fixture_dir(kStageName);
   const auto manifest = tests::load_fixture_manifest(fixture_root / "manifest.json");
 
-  const std::vector<std::string> expected_bindings = {
-      "xyz_ws", "sh_coeffs", "rotations", "scales_opacs",       "tiles_touched", "rect_tile_space",
-      "radii",  "xy_vs",     "depths",    "inv_cov_vs_opacity", "rgb",
-  };
+  const auto expected_bindings = gpu::binding_names(gpu::shader_interface("projection_forward"));
   REQUIRE(manifest.bindings == expected_bindings);
   REQUIRE(manifest.bindings.size() == gpu::kProjectionForwardBindingCount);
   REQUIRE_FALSE(manifest.profile_agnostic);

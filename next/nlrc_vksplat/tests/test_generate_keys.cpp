@@ -92,10 +92,7 @@ TEST_CASE("Dispatch generate_keys shader", "[gpu]") {
   const auto manifest = tests::load_fixture_manifest(fixture_root / "manifest.json");
   const auto golden_manifest = tests::load_fixture_manifest(golden_root / "manifest.json");
 
-  const std::vector<std::string> expected_bindings = {
-      "xy_vs",         "inv_cov_vs_opacity", "depths", "rect_tile_space", "index_buffer_offset",
-      "unsorted_keys", "unsorted_gauss_idx",
-  };
+  const auto expected_bindings = gpu::binding_names(gpu::shader_interface("generate_keys"));
   REQUIRE(manifest.bindings == expected_bindings);
   REQUIRE(manifest.bindings.size() == gpu::kGenerateKeysBindingCount);
   REQUIRE_FALSE(manifest.profile_agnostic);
