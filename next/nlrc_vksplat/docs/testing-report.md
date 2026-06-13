@@ -14,6 +14,7 @@ current test surface, and where future hardening should focus.
 | Covered dispatches | Smoke compute wrapper; Subgraph D utilities: cumsum, sum, where; isolated 32-bit radix sort; isolated Subgraph A `projection_forward`, `generate_keys`, `compute_tile_ranges`, and `rasterize_forward`; integrated Subgraph A `forward()` chain |
 | Fixture source | [`test_data/generate_fixtures.py`](../../../test_data/generate_fixtures.py) plus [`test_data/shader_binding_contracts.json`](../../../test_data/shader_binding_contracts.json) routing |
 | Per-fixture values | [`test_data/README.md`](../../../test_data/README.md) fixture catalog |
+| Shared test fixtures | `tests/support/fixtures.*` centralizes Subgraph A fixture helpers; `fixture_loader.*` centralizes manifest path scans and typed buffer loading |
 
 ## How to use this document
 

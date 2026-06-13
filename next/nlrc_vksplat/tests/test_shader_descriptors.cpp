@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -154,23 +153,6 @@ static_assert(kStorageBindingArraySize<decltype(gpu::radix_sort_downsweep_storag
               gpu::shader_binding_count_v<gpu::ShaderId::RadixSortDownsweep>);
 // clang-format on
 
-[[nodiscard]] std::vector<std::filesystem::path> manifest_paths_under(const std::filesystem::path &root) {
-  std::vector<std::filesystem::path> paths;
-  if (!std::filesystem::exists(root)) {
-    return paths;
-  }
-
-  for (const auto &entry : std::filesystem::recursive_directory_iterator(root)) {
-    if (!entry.is_regular_file() || entry.path().filename() != "manifest.json") {
-      continue;
-    }
-    paths.push_back(entry.path());
-  }
-
-  std::sort(paths.begin(), paths.end());
-  return paths;
-}
-
 template <gpu::ShaderId Id, std::size_t... Indices>
 // NOLINTNEXTLINE(readability-named-parameter)
 [[nodiscard]] std::vector<std::string> registry_binding_name_strings(std::index_sequence<Indices...>) {
@@ -278,7 +260,7 @@ TEST_CASE("Projection descriptor matches binding count and projection fixtures",
   REQUIRE(registry_bindings.size() == gpu::kProjectionForwardBindingCount);
 
   std::size_t checked_projection_fixtures = 0;
-  for (const auto &manifest_path : manifest_paths_under(tests::test_data_root() / "fixtures")) {
+  for (const auto &manifest_path : tests::manifest_paths_under(tests::test_data_root() / "fixtures")) {
     const auto manifest = tests::load_fixture_manifest(manifest_path);
     if (manifest.subgraph != "projection" || manifest.stage_name.find("projection_forward_") != 0U) {
       continue;
@@ -362,7 +344,7 @@ TEST_CASE("Fixture catalog and golden bindings match JSON shader binding routes"
   std::size_t checked_manifests = 0;
 
   for (const auto &root : roots) {
-    for (const auto &manifest_path : manifest_paths_under(root.path)) {
+    for (const auto &manifest_path : tests::manifest_paths_under(root.path)) {
       const auto manifest = tests::load_fixture_manifest(manifest_path);
       INFO("root: " << root.name);
       INFO("manifest: " << manifest_path.string());

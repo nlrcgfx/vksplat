@@ -1,5 +1,6 @@
 #include "fixture_loader.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -63,6 +64,23 @@ namespace {
 
 [[nodiscard]] fs::path golden_dir(const std::string &stage_name) {
   return resolve_stage_dir(test_data_root() / "golden_masters", stage_name);
+}
+
+[[nodiscard]] std::vector<fs::path> manifest_paths_under(const fs::path &root) {
+  std::vector<fs::path> paths;
+  if (!fs::exists(root)) {
+    return paths;
+  }
+
+  for (const auto &entry : fs::recursive_directory_iterator(root)) {
+    if (!entry.is_regular_file() || entry.path().filename() != "manifest.json") {
+      continue;
+    }
+    paths.push_back(entry.path());
+  }
+
+  std::sort(paths.begin(), paths.end());
+  return paths;
 }
 
 [[nodiscard]] std::vector<std::uint8_t> load_binary_file(const fs::path &path) {

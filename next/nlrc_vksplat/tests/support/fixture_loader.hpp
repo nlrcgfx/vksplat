@@ -17,6 +17,7 @@ namespace nlrc::vksplat::tests {
 [[nodiscard]] fs::path test_data_root();
 [[nodiscard]] fs::path fixture_dir(const std::string &stage_name);
 [[nodiscard]] fs::path golden_dir(const std::string &stage_name);
+[[nodiscard]] std::vector<fs::path> manifest_paths_under(const fs::path &root);
 
 [[nodiscard]] std::vector<std::uint8_t> load_binary_file(const fs::path &path);
 

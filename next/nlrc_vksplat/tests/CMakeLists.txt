@@ -60,6 +60,7 @@ list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 add_library(nlrc_vksplat_test_support STATIC
   support/fixture_manifest.cpp
   support/fixture_loader.cpp
+  support/fixtures.cpp
   support/golden_compare.cpp
   support/gpu_available.cpp
   support/manifest_profile.cpp

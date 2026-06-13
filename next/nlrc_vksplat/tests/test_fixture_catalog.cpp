@@ -1,9 +1,7 @@
-#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <map>
 #include <string>
-#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -13,23 +11,6 @@
 using namespace nlrc::vksplat;
 
 namespace {
-
-[[nodiscard]] std::vector<std::filesystem::path> manifest_paths_under(const std::filesystem::path &root) {
-  std::vector<std::filesystem::path> paths;
-  if (!std::filesystem::exists(root)) {
-    return paths;
-  }
-
-  for (const auto &entry : std::filesystem::recursive_directory_iterator(root)) {
-    if (!entry.is_regular_file() || entry.path().filename() != "manifest.json") {
-      continue;
-    }
-    paths.push_back(entry.path());
-  }
-
-  std::sort(paths.begin(), paths.end());
-  return paths;
-}
 
 void validate_manifest_file(const std::filesystem::path &manifest_path) {
   INFO("manifest: " << manifest_path.string());
@@ -71,7 +52,7 @@ void validate_manifest_file(const std::filesystem::path &manifest_path) {
 [[nodiscard]] std::map<std::string, std::filesystem::path>
 stage_relative_paths_under(const std::filesystem::path &root) {
   std::map<std::string, std::filesystem::path> paths_by_stage;
-  for (const auto &manifest_path : manifest_paths_under(root)) {
+  for (const auto &manifest_path : tests::manifest_paths_under(root)) {
     const auto manifest = tests::load_fixture_manifest(manifest_path);
     const auto relative_path = std::filesystem::relative(manifest_path.parent_path(), root);
     const auto [it, inserted] = paths_by_stage.emplace(manifest.stage_name, relative_path);
@@ -89,7 +70,7 @@ TEST_CASE("All committed fixture and golden manifests are valid", "[host]") {
   for (const auto &root : roots) {
     INFO("root: " << root.string());
     REQUIRE(std::filesystem::exists(root));
-    for (const auto &manifest_path : manifest_paths_under(root)) {
+    for (const auto &manifest_path : tests::manifest_paths_under(root)) {
       validate_manifest_file(manifest_path);
       ++checked_manifests;
     }

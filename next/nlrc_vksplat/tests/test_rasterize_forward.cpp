@@ -2,13 +2,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
+#include "fixtures.hpp"
 #include "golden_compare.hpp"
 #include "gpu/headless_context.hpp"
 #include "gpu/shader_execution.hpp"
@@ -21,7 +21,6 @@ using namespace nlrc::vksplat;
 
 namespace {
 
-constexpr std::uint32_t kDepthBits = 23;
 constexpr std::size_t kPixelChannels = 4;
 
 struct ImageGrid final {
@@ -29,13 +28,6 @@ struct ImageGrid final {
   std::uint32_t image_width;
   std::uint32_t grid_height;
   std::uint32_t grid_width;
-};
-
-struct PixelState final {
-  float r;
-  float g;
-  float b;
-  float transmittance;
 };
 
 [[nodiscard]] ImageGrid image_grid_from_manifest(const tests::FixtureManifest &manifest) {
@@ -53,58 +45,6 @@ struct PixelState final {
   };
 }
 
-[[nodiscard]] gpu::push_constants::Renderer make_uniforms(const ImageGrid &image_grid, std::uint32_t num_splats) {
-  return {
-      image_grid.image_height,
-      image_grid.image_width,
-      image_grid.grid_height,
-      image_grid.grid_width,
-      num_splats,
-      0U,
-      0U,
-      0U,
-      16.0F,
-      16.0F,
-      16.0F,
-      16.0F,
-      {0.0F, 0.0F, 0.0F, 0.0F},
-      {
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-      },
-  };
-}
-
-[[nodiscard]] PixelState
-pixel_at(const std::vector<float> &pixel_state, std::uint32_t image_width, std::uint32_t x, std::uint32_t y) {
-  const auto base = ((static_cast<std::size_t>(y) * image_width) + x) * kPixelChannels;
-  REQUIRE(base + 3U < pixel_state.size());
-  return {pixel_state[base], pixel_state[base + 1U], pixel_state[base + 2U], pixel_state[base + 3U]};
-}
-
-[[nodiscard]] std::int32_t contributor_at(const std::vector<std::int32_t> &n_contributors,
-                                          std::uint32_t image_width,
-                                          std::uint32_t x,
-                                          std::uint32_t y) {
-  const auto index = (static_cast<std::size_t>(y) * image_width) + x;
-  REQUIRE(index < n_contributors.size());
-  return n_contributors[index];
-}
-
 void require_valid_sorted_ranges(const std::vector<std::uint32_t> &sorted_keys,
                                  const std::vector<std::int32_t> &sorted_gauss_idx,
                                  const std::vector<std::int32_t> &tile_ranges,
@@ -113,30 +53,12 @@ void require_valid_sorted_ranges(const std::vector<std::uint32_t> &sorted_keys,
   REQUIRE(sorted_keys.size() == sorted_gauss_idx.size());
   REQUIRE(std::is_sorted(sorted_keys.begin(), sorted_keys.end()));
 
-  const auto num_indices = static_cast<std::int32_t>(sorted_keys.size());
-  const auto num_tiles = static_cast<std::size_t>(image_grid.grid_width) * image_grid.grid_height;
-  REQUIRE(tile_ranges.size() == num_tiles + 1U);
-  REQUIRE(std::is_sorted(tile_ranges.begin(), tile_ranges.end()));
-  REQUIRE(tile_ranges.back() == num_indices);
-
   for (const auto splat_index : sorted_gauss_idx) {
     REQUIRE(splat_index >= 0);
     REQUIRE(static_cast<std::size_t>(splat_index) < num_splats);
   }
 
-  for (std::size_t tile_id = 0; tile_id < num_tiles; ++tile_id) {
-    INFO("tile: " << tile_id);
-    const auto start = tile_ranges[tile_id];
-    const auto end = tile_ranges[tile_id + 1U];
-    REQUIRE(start >= 0);
-    REQUIRE(end >= start);
-    REQUIRE(end <= num_indices);
-
-    for (std::int32_t index = start; index < end; ++index) {
-      INFO("range index: " << index);
-      REQUIRE((sorted_keys[static_cast<std::size_t>(index)] >> kDepthBits) == tile_id);
-    }
-  }
+  tests::require_valid_tile_ranges(tile_ranges, sorted_keys, image_grid.grid_width, image_grid.grid_height);
 }
 
 void require_output_invariants(const std::vector<float> &pixel_state,
@@ -173,12 +95,12 @@ void require_empty_tile_centers_are_baseline(const std::vector<float> &pixel_sta
     const auto pixel_x = (tile_x * VKSPLAT_TILE_WIDTH) + (VKSPLAT_TILE_WIDTH / 2U);
     const auto pixel_y = (tile_y * VKSPLAT_TILE_HEIGHT) + (VKSPLAT_TILE_HEIGHT / 2U);
 
-    const auto pixel = pixel_at(pixel_state, image_grid.image_width, pixel_x, pixel_y);
+    const auto pixel = tests::pixel_at(pixel_state, image_grid.image_width, pixel_x, pixel_y);
     REQUIRE(pixel.r == 0.0F);
     REQUIRE(pixel.g == 0.0F);
     REQUIRE(pixel.b == 0.0F);
     REQUIRE(pixel.transmittance == 1.0F);
-    REQUIRE(contributor_at(n_contributors, image_grid.image_width, pixel_x, pixel_y) == 0);
+    REQUIRE(tests::contributor_at(n_contributors, image_grid.image_width, pixel_x, pixel_y) == 0);
   }
 }
 
@@ -197,8 +119,8 @@ void require_splat_centers_have_contribution(const std::vector<float> &pixel_sta
     REQUIRE(pixel_x < image_grid.image_width);
     REQUIRE(pixel_y < image_grid.image_height);
 
-    const auto pixel = pixel_at(pixel_state, image_grid.image_width, pixel_x, pixel_y);
-    REQUIRE(contributor_at(n_contributors, image_grid.image_width, pixel_x, pixel_y) > 0);
+    const auto pixel = tests::pixel_at(pixel_state, image_grid.image_width, pixel_x, pixel_y);
+    REQUIRE(tests::contributor_at(n_contributors, image_grid.image_width, pixel_x, pixel_y) > 0);
     REQUIRE(pixel.transmittance < 1.0F);
     REQUIRE((pixel.r > 0.0F || pixel.g > 0.0F || pixel.b > 0.0F));
   }
@@ -274,7 +196,11 @@ TEST_CASE("Dispatch rasterize_forward shader", "[gpu]") {
       bindings.pixel_state = &pixel_state_buffer;
       bindings.n_contributors = &n_contributors_buffer;
 
-      const auto uniforms = make_uniforms(image_grid, static_cast<std::uint32_t>(num_splats));
+      auto uniforms = tests::default_renderer_uniforms(static_cast<std::uint32_t>(num_splats));
+      uniforms.image_height = image_grid.image_height;
+      uniforms.image_width = image_grid.image_width;
+      uniforms.grid_height = image_grid.grid_height;
+      uniforms.grid_width = image_grid.grid_width;
       gpu::execute_rasterize_forward(context, bindings, uniforms, sorted_gauss_idx.size());
 
       const auto actual_pixel_state = pixel_state_buffer.read_back<float>(initial_pixel_state.size());

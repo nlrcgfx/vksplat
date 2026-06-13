@@ -1,12 +1,12 @@
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "fixture_loader.hpp"
 #include "fixture_manifest.hpp"
+#include "fixtures.hpp"
 #include "golden_compare.hpp"
 #include "gpu/headless_context.hpp"
 #include "gpu/shader_execution.hpp"
@@ -19,53 +19,12 @@ using namespace nlrc::vksplat;
 
 namespace {
 
-constexpr std::uint32_t kImageHeight = 32;
-constexpr std::uint32_t kImageWidth = 32;
-constexpr std::uint32_t kGridHeight = 2;
-constexpr std::uint32_t kGridWidth = 2;
-
 struct RectBounds final {
   std::uint32_t min_x;
   std::uint32_t min_y;
   std::uint32_t max_x;
   std::uint32_t max_y;
 };
-
-[[nodiscard]] gpu::push_constants::Renderer projection_uniforms() {
-  return {
-      kImageHeight,
-      kImageWidth,
-      kGridHeight,
-      kGridWidth,
-      1U,
-      0U,
-      0U,
-      0U,
-      16.0F,
-      16.0F,
-      16.0F,
-      16.0F,
-      {0.0F, 0.0F, 0.0F, 0.0F},
-      {
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-      },
-  };
-}
 
 [[nodiscard]] RectBounds decode_rect_tile_space(const std::vector<RectTileSpace> &rect_words) {
   if constexpr (kUseEmulatedInt64) {
@@ -95,50 +54,34 @@ struct RectBounds final {
 TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
-#if VKSPLAT_USE_EMULATED_INT64
-  constexpr const char *kStageName = "projection_forward_emulated_int64";
-#else
-  constexpr const char *kStageName = "projection_forward_native_int64";
-#endif
-
-  const auto fixture_root = tests::fixture_dir(kStageName);
+  const auto stage_name = tests::int64_profile_stage_name("projection_forward");
+  const auto fixture_root = tests::fixture_dir(stage_name);
   const auto manifest = tests::load_fixture_manifest(fixture_root / "manifest.json");
+  const auto fixture = tests::load_projection_fixture(stage_name);
 
   REQUIRE_FALSE(manifest.profile_agnostic);
 
-  const auto xyz_ws = tests::load_fixture_buffer<float>(fixture_root, manifest, "xyz_ws");
-  const auto sh_coeffs = tests::load_fixture_buffer<float>(fixture_root, manifest, "sh_coeffs");
-  const auto rotations = tests::load_fixture_buffer<float>(fixture_root, manifest, "rotations");
-  const auto scales_opacs = tests::load_fixture_buffer<float>(fixture_root, manifest, "scales_opacs");
-  const auto tiles_touched = tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "tiles_touched");
-  const auto rect_tile_space = tests::load_fixture_buffer<RectTileSpace>(fixture_root, manifest, "rect_tile_space");
-  const auto radii = tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "radii");
-  const auto xy_vs = tests::load_fixture_buffer<float>(fixture_root, manifest, "xy_vs");
-  const auto depths = tests::load_fixture_buffer<float>(fixture_root, manifest, "depths");
-  const auto inv_cov_vs_opacity = tests::load_fixture_buffer<float>(fixture_root, manifest, "inv_cov_vs_opacity");
-  const auto rgb = tests::load_fixture_buffer<float>(fixture_root, manifest, "rgb");
-
-  REQUIRE(sh_coeffs.size() == static_cast<std::size_t>(12U * VKSPLAT_SH_REORDER_SIZE * 4U));
-  REQUIRE(tiles_touched.size() == 1);
-  REQUIRE(radii.size() == 1);
-  REQUIRE(xy_vs.size() == 2);
-  REQUIRE(depths.size() == 1);
-  REQUIRE(inv_cov_vs_opacity.size() == 4);
-  REQUIRE(rgb.size() == 3);
+  REQUIRE(fixture.sh_coeffs.size() == static_cast<std::size_t>(12U * VKSPLAT_SH_REORDER_SIZE * 4U));
+  REQUIRE(fixture.tiles_touched.size() == 1);
+  REQUIRE(fixture.radii.size() == 1);
+  REQUIRE(fixture.xy_vs.size() == 2);
+  REQUIRE(fixture.depths.size() == 1);
+  REQUIRE(fixture.inv_cov_vs_opacity.size() == 4);
+  REQUIRE(fixture.rgb.size() == 3);
 
   const gpu::HeadlessContext context;
 
-  auto xyz_ws_buffer = gpu::make_storage_buffer(context, xyz_ws);
-  auto sh_coeffs_buffer = gpu::make_storage_buffer(context, sh_coeffs);
-  auto rotations_buffer = gpu::make_storage_buffer(context, rotations);
-  auto scales_opacs_buffer = gpu::make_storage_buffer(context, scales_opacs);
-  auto tiles_touched_buffer = gpu::make_storage_buffer(context, tiles_touched);
-  auto rect_tile_space_buffer = gpu::make_storage_buffer(context, rect_tile_space);
-  auto radii_buffer = gpu::make_storage_buffer(context, radii);
-  auto xy_vs_buffer = gpu::make_storage_buffer(context, xy_vs);
-  auto depths_buffer = gpu::make_storage_buffer(context, depths);
-  auto inv_cov_vs_opacity_buffer = gpu::make_storage_buffer(context, inv_cov_vs_opacity);
-  auto rgb_buffer = gpu::make_storage_buffer(context, rgb);
+  auto xyz_ws_buffer = gpu::make_storage_buffer(context, fixture.xyz_ws);
+  auto sh_coeffs_buffer = gpu::make_storage_buffer(context, fixture.sh_coeffs);
+  auto rotations_buffer = gpu::make_storage_buffer(context, fixture.rotations);
+  auto scales_opacs_buffer = gpu::make_storage_buffer(context, fixture.scales_opacs);
+  auto tiles_touched_buffer = gpu::make_storage_buffer(context, fixture.tiles_touched);
+  auto rect_tile_space_buffer = gpu::make_storage_buffer(context, fixture.rect_tile_space);
+  auto radii_buffer = gpu::make_storage_buffer(context, fixture.radii);
+  auto xy_vs_buffer = gpu::make_storage_buffer(context, fixture.xy_vs);
+  auto depths_buffer = gpu::make_storage_buffer(context, fixture.depths);
+  auto inv_cov_vs_opacity_buffer = gpu::make_storage_buffer(context, fixture.inv_cov_vs_opacity);
+  auto rgb_buffer = gpu::make_storage_buffer(context, fixture.rgb);
 
   gpu::ProjectionForwardBindings bindings{};
   bindings.xyz_ws = &xyz_ws_buffer;
@@ -153,10 +96,11 @@ TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
   bindings.inv_cov_vs_opacity = &inv_cov_vs_opacity_buffer;
   bindings.rgb = &rgb_buffer;
 
-  gpu::execute_projection_forward(context, bindings, projection_uniforms());
+  const auto uniforms = tests::default_renderer_uniforms(1U);
+  gpu::execute_projection_forward(context, bindings, uniforms);
 
   const auto actual_tiles_touched = tiles_touched_buffer.read_back<std::int32_t>(1);
-  const auto actual_rect_tile_space = rect_tile_space_buffer.read_back<RectTileSpace>(rect_tile_space.size());
+  const auto actual_rect_tile_space = rect_tile_space_buffer.read_back<RectTileSpace>(fixture.rect_tile_space.size());
   const auto actual_radii = radii_buffer.read_back<std::int32_t>(1);
   const auto actual_xy_vs = xy_vs_buffer.read_back<float>(2);
   const auto actual_depths = depths_buffer.read_back<float>(1);
@@ -169,14 +113,14 @@ TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
   REQUIRE_NOTHROW(tests::assert_no_nan_inf(make_span(actual_rgb)));
 
   REQUIRE(actual_tiles_touched[0] > 0);
-  REQUIRE(actual_tiles_touched[0] <= static_cast<std::int32_t>(kGridWidth * kGridHeight));
+  REQUIRE(actual_tiles_touched[0] <= static_cast<std::int32_t>(uniforms.grid_width * uniforms.grid_height));
   REQUIRE(actual_radii[0] > 0);
 
   REQUIRE(actual_xy_vs[0] >= 0.0F);
-  REQUIRE(actual_xy_vs[0] < static_cast<float>(kImageWidth));
+  REQUIRE(actual_xy_vs[0] < static_cast<float>(uniforms.image_width));
 
   REQUIRE(actual_xy_vs[1] >= 0.0F);
-  REQUIRE(actual_xy_vs[1] < static_cast<float>(kImageHeight));
+  REQUIRE(actual_xy_vs[1] < static_cast<float>(uniforms.image_height));
 
   REQUIRE(actual_depths[0] > 0.0F);
   REQUIRE(actual_inv_cov_vs_opacity[3] >= 0.0F);
@@ -190,8 +134,8 @@ TEST_CASE("Dispatch projection_forward shader", "[gpu]") {
   const RectBounds rect = decode_rect_tile_space(actual_rect_tile_space);
   REQUIRE(rect.min_x <= rect.max_x);
   REQUIRE(rect.min_y <= rect.max_y);
-  REQUIRE(rect.max_x <= kGridWidth);
-  REQUIRE(rect.max_y <= kGridHeight);
+  REQUIRE(rect.max_x <= uniforms.grid_width);
+  REQUIRE(rect.max_y <= uniforms.grid_height);
   REQUIRE(rect.min_x < rect.max_x);
   REQUIRE(rect.min_y < rect.max_y);
 

@@ -6,14 +6,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "fixture_loader.hpp"
-#include "fixture_manifest.hpp"
+#include "fixtures.hpp"
 #include "golden_compare.hpp"
 #include "gpu/headless_context.hpp"
 #include "gpu/shader_execution.hpp"
 #include "gpu/storage_buffer.hpp"
 #include "gpu_available.hpp"
-#include "nlrc_vksplat_config.hpp"
 #include "span.hpp"
 
 using namespace nlrc::vksplat;
@@ -24,124 +22,7 @@ constexpr std::uint32_t kImageHeight = 32;
 constexpr std::uint32_t kImageWidth = 32;
 constexpr std::uint32_t kGridHeight = 2;
 constexpr std::uint32_t kGridWidth = 2;
-constexpr std::uint32_t kDepthBits = 23;
 constexpr std::size_t kPixelChannels = 4;
-
-struct ProjectionFixtureData final {
-  std::vector<float> xyz_ws;
-  std::vector<float> sh_coeffs;
-  std::vector<float> rotations;
-  std::vector<float> scales_opacs;
-  std::vector<std::int32_t> tiles_touched;
-  std::vector<RectTileSpace> rect_tile_space;
-  std::vector<std::int32_t> radii;
-  std::vector<float> xy_vs;
-  std::vector<float> depths;
-  std::vector<float> inv_cov_vs_opacity;
-  std::vector<float> rgb;
-};
-
-struct PixelState final {
-  float r;
-  float g;
-  float b;
-  float transmittance;
-};
-
-[[nodiscard]] gpu::push_constants::Renderer make_uniforms(std::uint32_t num_splats) {
-  return {
-      kImageHeight,
-      kImageWidth,
-      kGridHeight,
-      kGridWidth,
-      num_splats,
-      0U,
-      0U,
-      0U,
-      16.0F,
-      16.0F,
-      16.0F,
-      16.0F,
-      {0.0F, 0.0F, 0.0F, 0.0F},
-      {
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          0.0F,
-          1.0F,
-      },
-  };
-}
-
-[[nodiscard]] ProjectionFixtureData load_projection_fixture(const char *stage_name) {
-  const auto fixture_root = tests::fixture_dir(stage_name);
-  const auto manifest = tests::load_fixture_manifest(fixture_root / "manifest.json");
-
-  return {
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "xyz_ws"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "sh_coeffs"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "rotations"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "scales_opacs"),
-      tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "tiles_touched"),
-      tests::load_fixture_buffer<RectTileSpace>(fixture_root, manifest, "rect_tile_space"),
-      tests::load_fixture_buffer<std::int32_t>(fixture_root, manifest, "radii"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "xy_vs"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "depths"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "inv_cov_vs_opacity"),
-      tests::load_fixture_buffer<float>(fixture_root, manifest, "rgb"),
-  };
-}
-
-[[nodiscard]] PixelState pixel_at(const std::vector<float> &pixel_state, std::uint32_t x, std::uint32_t y) {
-  const auto base = ((static_cast<std::size_t>(y) * kImageWidth) + x) * kPixelChannels;
-  REQUIRE(base + 3U < pixel_state.size());
-  return {pixel_state[base], pixel_state[base + 1U], pixel_state[base + 2U], pixel_state[base + 3U]};
-}
-
-[[nodiscard]] std::int32_t
-contributor_at(const std::vector<std::int32_t> &n_contributors, std::uint32_t x, std::uint32_t y) {
-  const auto index = (static_cast<std::size_t>(y) * kImageWidth) + x;
-  REQUIRE(index < n_contributors.size());
-  return n_contributors[index];
-}
-
-void require_valid_tile_ranges(const std::vector<std::int32_t> &tile_ranges,
-                               const std::vector<std::uint32_t> &sorted_keys) {
-  const auto num_tiles = static_cast<std::size_t>(kGridHeight) * kGridWidth;
-  const auto num_indices = static_cast<std::int32_t>(sorted_keys.size());
-  REQUIRE(tile_ranges.size() == num_tiles + 1U);
-  REQUIRE(std::is_sorted(tile_ranges.begin(), tile_ranges.end()));
-  REQUIRE(tile_ranges.back() == num_indices);
-
-  for (const auto key : sorted_keys) {
-    REQUIRE((key >> kDepthBits) < num_tiles);
-  }
-
-  for (std::size_t tile_id = 0; tile_id < num_tiles; ++tile_id) {
-    INFO("tile: " << tile_id);
-    const auto start = tile_ranges[tile_id];
-    const auto end = tile_ranges[tile_id + 1U];
-    REQUIRE(start >= 0);
-    REQUIRE(end >= start);
-    REQUIRE(end <= num_indices);
-
-    for (std::int32_t index = start; index < end; ++index) {
-      INFO("range index: " << index);
-      REQUIRE((sorted_keys[static_cast<std::size_t>(index)] >> kDepthBits) == tile_id);
-    }
-  }
-}
 
 void require_pixel_invariants(const std::vector<float> &pixel_state,
                               const std::vector<std::int32_t> &n_contributors,
@@ -174,16 +55,11 @@ void require_all_equal(const std::vector<T> &values, T sentinel) {
 TEST_CASE("Dispatch forward pipeline", "[gpu]") {
   NLRC_REQUIRE_GPU();
 
-#if VKSPLAT_USE_EMULATED_INT64
-  constexpr const char *kVisibleStageName = "projection_forward_emulated_int64";
-  constexpr const char *kNoVisibleStageName = "projection_forward_no_visible_emulated_int64";
-#else
-  constexpr const char *kVisibleStageName = "projection_forward_native_int64";
-  constexpr const char *kNoVisibleStageName = "projection_forward_no_visible_native_int64";
-#endif
+  const auto visible_stage_name = tests::int64_profile_stage_name("projection_forward");
+  const auto no_visible_stage_name = tests::int64_profile_stage_name("projection_forward_no_visible");
 
   SECTION("visible single splat") {
-    const auto fixture = load_projection_fixture(kVisibleStageName);
+    const auto fixture = tests::load_projection_fixture(visible_stage_name);
     const auto num_splats = fixture.tiles_touched.size();
     const auto num_tiles = static_cast<std::size_t>(kGridHeight) * kGridWidth;
     const auto max_indices = num_splats * num_tiles;
@@ -242,7 +118,8 @@ TEST_CASE("Dispatch forward pipeline", "[gpu]") {
     bindings.pixel_state = &pixel_state_buffer;
     bindings.n_contributors = &n_contributors_buffer;
 
-    const auto result = gpu::execute_forward(context, bindings, make_uniforms(static_cast<std::uint32_t>(num_splats)));
+    const auto result = gpu::execute_forward(context, bindings,
+                                             tests::default_renderer_uniforms(static_cast<std::uint32_t>(num_splats)));
 
     REQUIRE(result.num_indices > 0U);
     REQUIRE(result.rasterized);
@@ -261,7 +138,7 @@ TEST_CASE("Dispatch forward pipeline", "[gpu]") {
     }
 
     const auto actual_tile_ranges = tile_ranges_buffer.read_back<std::int32_t>(num_tiles + 1U);
-    require_valid_tile_ranges(actual_tile_ranges, sorted_keys);
+    tests::require_valid_tile_ranges(actual_tile_ranges, sorted_keys);
 
     const auto actual_pixel_state = pixel_state_buffer.read_back<float>(num_pixels * kPixelChannels);
     const auto actual_n_contributors = n_contributors_buffer.read_back<std::int32_t>(num_pixels);
@@ -279,14 +156,14 @@ TEST_CASE("Dispatch forward pipeline", "[gpu]") {
     REQUIRE(center_x < kImageWidth);
     REQUIRE(center_y < kImageHeight);
 
-    const auto center_pixel = pixel_at(actual_pixel_state, center_x, center_y);
-    REQUIRE(contributor_at(actual_n_contributors, center_x, center_y) > 0);
+    const auto center_pixel = tests::pixel_at(actual_pixel_state, kImageWidth, center_x, center_y);
+    REQUIRE(tests::contributor_at(actual_n_contributors, kImageWidth, center_x, center_y) > 0);
     REQUIRE(center_pixel.transmittance < 1.0F);
     REQUIRE((center_pixel.r > 0.0F || center_pixel.g > 0.0F || center_pixel.b > 0.0F));
   }
 
   SECTION("no visible splats early-exits before tile processing and rasterization") {
-    const auto fixture = load_projection_fixture(kNoVisibleStageName);
+    const auto fixture = tests::load_projection_fixture(no_visible_stage_name);
     const auto num_splats = fixture.tiles_touched.size();
     const auto num_tiles = static_cast<std::size_t>(kGridHeight) * kGridWidth;
     const auto max_indices = num_splats * num_tiles;
@@ -345,7 +222,8 @@ TEST_CASE("Dispatch forward pipeline", "[gpu]") {
     bindings.pixel_state = &pixel_state_buffer;
     bindings.n_contributors = &n_contributors_buffer;
 
-    const auto result = gpu::execute_forward(context, bindings, make_uniforms(static_cast<std::uint32_t>(num_splats)));
+    const auto result = gpu::execute_forward(context, bindings,
+                                             tests::default_renderer_uniforms(static_cast<std::uint32_t>(num_splats)));
 
     REQUIRE(result.num_indices == 0U);
     REQUIRE_FALSE(result.rasterized);
